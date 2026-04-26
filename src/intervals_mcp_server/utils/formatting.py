@@ -656,6 +656,9 @@ def format_athlete_profile(athlete: dict[str, Any]) -> str:
             if bike.get(key) is not None:
                 bike_lines.append(f"- **Bike {label}**: {bike[key]}")
 
+    # Always emit a row per labelled threshold even when unset — the consumer
+    # (a skill or another agent) needs to distinguish "tool failed" from
+    # "field exists but the user hasn't configured it yet".
     run_lines: list[str] = []
     if run:
         tp = run.get("threshold_pace")
@@ -663,9 +666,12 @@ def format_athlete_profile(athlete: dict[str, Any]) -> str:
             run_lines.append(
                 f"- **Run threshold pace**: {_ms_to_min_per_km(tp)} (raw {tp:.3f} m/s)"
             )
+        else:
+            run_lines.append("- **Run threshold pace**: — (not set)")
         for label, key in [("LTHR", "lthr"), ("Max HR", "max_hr")]:
-            if run.get(key) is not None:
-                run_lines.append(f"- **Run {label}**: {run[key]}")
+            run_lines.append(
+                f"- **Run {label}**: {run[key] if run.get(key) is not None else '— (not set)'}"
+            )
 
     swim_lines: list[str] = []
     if swim:
@@ -674,6 +680,8 @@ def format_athlete_profile(athlete: dict[str, Any]) -> str:
             swim_lines.append(
                 f"- **Swim CSS**: {_ms_to_sec_per_100m(tp)} (raw {tp:.3f} m/s)"
             )
+        else:
+            swim_lines.append("- **Swim CSS**: — (not set)")
 
     other_lines: list[str] = []
     if other:
