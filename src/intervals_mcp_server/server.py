@@ -190,6 +190,35 @@ from intervals_mcp_server.tools.activity_athlete_level import (  # pylint: disab
     search_for_activities_full,
     search_for_intervals,
 )
+from intervals_mcp_server.tools.routes_gear import (  # pylint: disable=wrong-import-position  # noqa: E402
+    check_route_merge,
+    create_gear,
+    create_gear_reminder,
+    delete_gear,
+    delete_gear_reminder,
+    get_athlete_route,
+    list_athlete_routes,
+    list_gear,
+    recalc_gear_distance,
+    replace_gear,
+    update_athlete_route,
+    update_gear,
+    update_gear_reminder,
+)
+from intervals_mcp_server.tools.athlete_extras import (  # pylint: disable=wrong-import-position  # noqa: E402
+    disconnect_app,
+    get_athlete_basic_profile,
+    get_athlete_settings_for_device,
+    get_athlete_summary,
+    get_athlete_training_plan,
+    get_shared_event,
+    get_weather_config,
+    get_weather_forecast,
+    update_athlete,
+    update_athlete_plans,
+    update_athlete_training_plan,
+    update_weather_config,
+)
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -302,6 +331,33 @@ __all__ = [
     "get_athlete_mmp_model",
     "create_manual_activity",
     "create_multiple_manual_activities",
+    # routes_gear (Wave 4A)
+    "list_athlete_routes",
+    "get_athlete_route",
+    "update_athlete_route",
+    "check_route_merge",
+    "list_gear",
+    "create_gear",
+    "update_gear",
+    "delete_gear",
+    "recalc_gear_distance",
+    "replace_gear",
+    "create_gear_reminder",
+    "update_gear_reminder",
+    "delete_gear_reminder",
+    # athlete_extras (Wave 4B)
+    "update_athlete",
+    "update_athlete_plans",
+    "get_athlete_summary",
+    "get_athlete_settings_for_device",
+    "get_athlete_training_plan",
+    "update_athlete_training_plan",
+    "get_athlete_basic_profile",
+    "get_weather_config",
+    "update_weather_config",
+    "get_weather_forecast",
+    "get_shared_event",
+    "disconnect_app",
 ]
 
 
