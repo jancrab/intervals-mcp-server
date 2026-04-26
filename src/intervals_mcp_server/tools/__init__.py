@@ -27,6 +27,34 @@ from intervals_mcp_server.tools.athlete import (  # noqa: F401
     get_fitness_curve,
     get_ftp_history,
 )
+from intervals_mcp_server.tools.sport_settings import (  # noqa: F401
+    apply_sport_settings_to_activities,
+    create_sport_settings,
+    delete_sport_settings,
+    get_sport_settings,
+    list_activities_matching_sport_settings,
+    list_pace_distances,
+    list_pace_distances_for_sport,
+    list_sport_settings,
+    update_sport_settings,
+    update_sport_settings_multi,
+)
+from intervals_mcp_server.tools.wellness_writes import (  # noqa: F401
+    get_wellness_record,
+    update_wellness_record,
+    update_wellness_record_today,
+    update_wellness_records_bulk,
+    upload_wellness_csv,
+)
+from intervals_mcp_server.tools.events_extras import (  # noqa: F401
+    apply_plan,
+    create_multiple_events,
+    delete_events_bulk,
+    duplicate_events,
+    list_event_tags,
+    mark_event_as_done,
+    update_events_in_range,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -60,4 +88,29 @@ __all__ = [
     "get_athlete_profile",
     "get_fitness_curve",
     "get_ftp_history",
+    # sport_settings
+    "list_sport_settings",
+    "get_sport_settings",
+    "create_sport_settings",
+    "update_sport_settings",
+    "update_sport_settings_multi",
+    "delete_sport_settings",
+    "apply_sport_settings_to_activities",
+    "list_activities_matching_sport_settings",
+    "list_pace_distances_for_sport",
+    "list_pace_distances",
+    # wellness_writes
+    "get_wellness_record",
+    "update_wellness_record",
+    "update_wellness_record_today",
+    "update_wellness_records_bulk",
+    "upload_wellness_csv",
+    # events_extras
+    "mark_event_as_done",
+    "apply_plan",
+    "create_multiple_events",
+    "delete_events_bulk",
+    "duplicate_events",
+    "update_events_in_range",
+    "list_event_tags",
 ]
