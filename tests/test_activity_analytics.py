@@ -368,9 +368,37 @@ def test_find_best_efforts_happy(monkeypatch):
         return SAMPLE_BEST_EFFORTS
 
     _patch_request(monkeypatch, fake_request)
-    out = asyncio.run(find_best_efforts(activity_id="i1", stream="watts"))
+    out = asyncio.run(find_best_efforts(activity_id="i1", duration=300))
     assert "Best efforts (2)" in out
-    assert captured["params"] == {"stream": "watts"}
+    assert captured["params"] == {"stream": "watts", "duration": 300}
+
+
+def test_find_best_efforts_distance(monkeypatch):
+    captured = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured.update(kwargs)
+        return SAMPLE_BEST_EFFORTS
+
+    _patch_request(monkeypatch, fake_request)
+    out = asyncio.run(find_best_efforts(activity_id="i1", stream="pace", distance=1000))
+    assert "Best efforts" in out
+    assert captured["params"] == {"stream": "pace", "distance": 1000}
+
+
+def test_find_best_efforts_neither_required(monkeypatch):
+    """Neither duration nor distance → user-friendly error, no API call."""
+    called = False
+
+    async def fake_request(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    _patch_request(monkeypatch, fake_request)
+    out = asyncio.run(find_best_efforts(activity_id="i1"))
+    assert "duration" in out.lower() and "distance" in out.lower()
+    assert not called, "should not hit the API when neither param given"
 
 
 # ---------------------------------------------------------------------------

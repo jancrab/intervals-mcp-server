@@ -573,18 +573,27 @@ async def get_activity_segments(
 async def find_best_efforts(
     activity_id: str,
     stream: str = "watts",
+    duration: int | None = None,
+    distance: float | None = None,
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Find best efforts within an activity for a given stream.
+    """Find best efforts within an activity for a stream + duration/distance.
 
-    The API requires a ``stream`` query param (e.g. ``watts``, ``heartrate``,
-    ``pace``); passing none returns a 422.
+    Live API requires **all of**: ``stream`` (always) AND one of ``duration`` or
+    ``distance``. Defaults assume cycling power: ``stream="watts"``, supply
+    ``duration`` for a time-based effort.
+
+    Examples:
+        find_best_efforts(activity_id="i123", duration=300)               # best 5-min watts
+        find_best_efforts(activity_id="i123", stream="heartrate", duration=60)
+        find_best_efforts(activity_id="i123", stream="pace", distance=1000)
 
     Args:
         activity_id: The Intervals.icu activity ID.
-        stream: Stream name to search (default ``watts``). Common values:
-            ``watts``, ``heartrate``, ``pace``.
+        stream: Stream to search; common values ``watts``, ``heartrate``, ``pace``.
+        duration: Effort duration in seconds (one of duration/distance required).
+        distance: Effort distance in meters (one of duration/distance required).
         athlete_id: Ignored; kept for parameter consistency.
         api_key: Override INTERVALS_API_KEY env var if provided.
     """
@@ -592,12 +601,22 @@ async def find_best_efforts(
     if error:
         return error
     if not stream:
-        return "Error: stream is required (e.g. 'watts' or 'heartrate')."
+        return "Error: `stream` is required (e.g. 'watts', 'heartrate', 'pace')."
+    if duration is None and distance is None:
+        return (
+            "Error: one of `duration` (seconds) or `distance` (meters) is required."
+        )
+
+    params: dict[str, str | int | float] = {"stream": stream}
+    if duration is not None:
+        params["duration"] = duration
+    if distance is not None:
+        params["distance"] = distance
 
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/best-efforts",
         api_key=api_key,
-        params={"stream": stream},
+        params=params,
     )
     if _is_error(result):
         return _error_message(result, "fetching best efforts")  # type: ignore[arg-type]
