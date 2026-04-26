@@ -55,6 +55,24 @@ from intervals_mcp_server.tools.events_extras import (  # noqa: F401
     mark_event_as_done,
     update_events_in_range,
 )
+from intervals_mcp_server.tools.library import (  # noqa: F401
+    apply_current_plan_changes,
+    create_multiple_workouts,
+    create_workout,
+    create_workout_folder,
+    delete_workout,
+    delete_workout_folder,
+    duplicate_workouts,
+    get_workout,
+    list_folder_shared_with,
+    list_workout_folders,
+    list_workout_tags,
+    list_workouts,
+    update_folder_shared_with,
+    update_plan_workouts,
+    update_workout,
+    update_workout_folder,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -113,4 +131,21 @@ __all__ = [
     "duplicate_events",
     "update_events_in_range",
     "list_event_tags",
+    # library (workout templates + folders)
+    "list_workout_folders",
+    "create_workout_folder",
+    "delete_workout_folder",
+    "update_workout_folder",
+    "list_folder_shared_with",
+    "update_folder_shared_with",
+    "update_plan_workouts",
+    "list_workout_tags",
+    "list_workouts",
+    "create_workout",
+    "create_multiple_workouts",
+    "delete_workout",
+    "get_workout",
+    "update_workout",
+    "apply_current_plan_changes",
+    "duplicate_workouts",
 ]
