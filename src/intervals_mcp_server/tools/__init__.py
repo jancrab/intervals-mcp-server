@@ -22,6 +22,11 @@ from intervals_mcp_server.tools.events import (  # noqa: F401
     get_events,
 )
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
+from intervals_mcp_server.tools.athlete import (  # noqa: F401
+    get_athlete_profile,
+    get_fitness_curve,
+    get_ftp_history,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -52,4 +57,7 @@ __all__ = [
     "delete_events_by_date_range",
     "add_or_update_event",
     "get_wellness_data",
+    "get_athlete_profile",
+    "get_fitness_curve",
+    "get_ftp_history",
 ]

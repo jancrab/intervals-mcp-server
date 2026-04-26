@@ -560,3 +560,190 @@ Cadence: Avg {group.get("average_cadence", 0)}, Max {group.get("max_cadence", 0)
 """
 
     return result
+
+
+# --- athlete profile / fitness curve / FTP history helpers ---
+
+
+def _fmt_num(value: Any, fmt: str = "") -> str:
+    """Format a numeric value for markdown output, returning em-dash when absent."""
+    if value is None:
+        return "—"
+    try:
+        if fmt:
+            return format(value, fmt)
+        return str(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _ms_to_min_per_km(mps: float | None) -> str:
+    """Convert pace in m/s (intervals.icu's storage) to mm:ss/km for display."""
+    if not mps:
+        return "—"
+    secs_per_km = 1000.0 / mps
+    m, s = divmod(int(round(secs_per_km)), 60)
+    return f"{m}:{s:02d}/km"
+
+
+def _ms_to_sec_per_100m(mps: float | None) -> str:
+    """Convert pace in m/s to mm:ss/100m for swim display."""
+    if not mps:
+        return "—"
+    secs_per_100m = 100.0 / mps
+    m, s = divmod(int(round(secs_per_100m)), 60)
+    return f"{m}:{s:02d}/100m"
+
+
+def _sport_settings(athlete: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Bucket athlete['sportSettings'] (a list of 4) by primary discipline.
+
+    Each entry has a 'types' list — first matching canonical discipline wins
+    (Ride / Run / Swim / Other).
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for ss in athlete.get("sportSettings") or []:
+        if not isinstance(ss, dict):
+            continue
+        types = ss.get("types") or []
+        if "Ride" in types and "bike" not in out:
+            out["bike"] = ss
+        elif "Run" in types and "run" not in out:
+            out["run"] = ss
+        elif "Swim" in types and "swim" not in out:
+            out["swim"] = ss
+        elif "Other" in types and "other" not in out:
+            out["other"] = ss
+    return out
+
+
+def format_athlete_profile(athlete: dict[str, Any]) -> str:
+    """Render an athlete profile (with sportSettings) as markdown.
+
+    Surfaces identity (name, email, sex, etc.) and per-discipline thresholds:
+    bike FTP/LTHR/maxHR, run threshold pace + LTHR/maxHR, swim CSS, other LTHR/maxHR.
+    """
+    ss = _sport_settings(athlete)
+    bike = ss.get("bike") or {}
+    run = ss.get("run") or {}
+    swim = ss.get("swim") or {}
+    other = ss.get("other") or {}
+
+    identity_lines: list[str] = []
+    for label, key in [
+        ("Name", "name"),
+        ("First name", "firstname"),
+        ("Email", "email"),
+        ("Sex", "sex"),
+        ("City / Country", "city"),
+        ("Timezone", "timezone"),
+        ("Date format", "date_format"),
+    ]:
+        v = athlete.get(key)
+        if v not in (None, ""):
+            identity_lines.append(f"- **{label}**: {v}")
+
+    bike_lines: list[str] = []
+    if bike:
+        ftp = bike.get("ftp")
+        indoor_ftp = bike.get("indoor_ftp")
+        if ftp is not None:
+            line = f"- **Bike FTP**: {ftp} W"
+            if indoor_ftp is not None and indoor_ftp != ftp:
+                line += f" (indoor: {indoor_ftp} W)"
+            bike_lines.append(line)
+        for label, key in [("LTHR", "lthr"), ("Max HR", "max_hr")]:
+            if bike.get(key) is not None:
+                bike_lines.append(f"- **Bike {label}**: {bike[key]}")
+
+    run_lines: list[str] = []
+    if run:
+        tp = run.get("threshold_pace")
+        if tp:
+            run_lines.append(
+                f"- **Run threshold pace**: {_ms_to_min_per_km(tp)} (raw {tp:.3f} m/s)"
+            )
+        for label, key in [("LTHR", "lthr"), ("Max HR", "max_hr")]:
+            if run.get(key) is not None:
+                run_lines.append(f"- **Run {label}**: {run[key]}")
+
+    swim_lines: list[str] = []
+    if swim:
+        tp = swim.get("threshold_pace")
+        if tp:
+            swim_lines.append(
+                f"- **Swim CSS**: {_ms_to_sec_per_100m(tp)} (raw {tp:.3f} m/s)"
+            )
+
+    other_lines: list[str] = []
+    if other:
+        for label, key in [("LTHR", "lthr"), ("Max HR", "max_hr")]:
+            if other.get(key) is not None:
+                other_lines.append(f"- **Other {label}**: {other[key]}")
+
+    sections: list[str] = ["# Athlete profile", ""]
+    sections.extend(identity_lines)
+    if bike_lines:
+        sections.extend(["", "## Bike", *bike_lines])
+    if run_lines:
+        sections.extend(["", "## Run", *run_lines])
+    if swim_lines:
+        sections.extend(["", "## Swim", *swim_lines])
+    if other_lines:
+        sections.extend(["", "## Other", *other_lines])
+
+    if athlete.get("icu_resting_hr") is not None:
+        sections.extend(["", f"- **Resting HR (current)**: {athlete['icu_resting_hr']}"])
+
+    if not (identity_lines or bike_lines or run_lines or swim_lines or other_lines):
+        return "_(empty profile — no identity or sportSettings fields populated)_"
+
+    return "\n".join(sections)
+
+
+def format_fitness_curve(records: list[dict[str, Any]]) -> str:
+    """Render a CTL/ATL/TSB (form) table from wellness records."""
+    if not records:
+        return "_No fitness data in range._"
+    lines = ["| Date | CTL | ATL | TSB (form) |", "|---|---|---|---|"]
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        ctl = r.get("ctl")
+        atl = r.get("atl")
+        form = (ctl - atl) if (ctl is not None and atl is not None) else None
+        date = r.get("id") or r.get("date") or "—"
+        lines.append(
+            f"| {date} | {_fmt_num(ctl, '.1f' if isinstance(ctl, float) else '')} "
+            f"| {_fmt_num(atl, '.1f' if isinstance(atl, float) else '')} "
+            f"| {_fmt_num(form, '.1f' if isinstance(form, float) else '')} |"
+        )
+    return "\n".join(lines)
+
+
+def format_ftp_history(activities: list[dict[str, Any]]) -> str:
+    """Render a markdown table of FTP change-points from a list of activities.
+
+    Sorts ascending by date, then dedupes consecutive same-FTP entries so each
+    row marks a change in icu_ftp.
+    """
+    rows: list[tuple[str, Any, Any]] = []
+    last_ftp: Any = None
+    sorted_acts = sorted(
+        (a for a in activities if isinstance(a, dict)),
+        key=lambda x: x.get("start_date_local") or "",
+    )
+    for a in sorted_acts:
+        ftp = a.get("icu_ftp")
+        if ftp is None or ftp == last_ftp:
+            continue
+        date = str(a.get("start_date_local", ""))[:10]
+        rows.append((date, ftp, a.get("icu_rolling_ftp")))
+        last_ftp = ftp
+
+    if not rows:
+        return "_No FTP changes in range._"
+    lines = ["| Date | FTP (W) | Rolling FTP (W) |", "|---|---|---|"]
+    for dt, ftp, rolling in rows:
+        lines.append(f"| {dt} | {_fmt_num(ftp)} | {_fmt_num(rolling)} |")
+    return "\n".join(lines)
