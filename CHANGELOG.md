@@ -4,38 +4,33 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 ## [Unreleased]
 
-### Fixed — MCPB install blocked by Python pre-flight
-
-- Removed `compatibility.runtimes.python` from `manifest.json`. That field made Claude Desktop pre-flight-check the **host** Python interpreter — surfaced as "Python >=3.12 required" during install — but `uv`-driven bundles never use host Python. They auto-provision a matching interpreter from `pyproject.toml`'s `requires-python` constraint. The pre-flight check was both wrong (we don't use host Python) and harmful (blocked installs on systems with older host Python despite `uv` handling it transparently). Bundle SHA-256 changed accordingly. Caught during the first real Desktop smoke install — pre-release fix, no downstream users affected.
-
-### Added — Cycling-coaching gap-fillers in lean (research-driven)
-
-After a skeptical research subagent reviewed the cycling literature (Coggan TSS/NP/IF papers, TrainingPeaks Performance Manager, Friel aerobic-decoupling 5%/10% rule, Skiba CP literature) and challenged my proposed lean additions, the conclusion was that 95% of per-workout coaching scalars (TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL) are **already exposed as fields on `get_activity_details`** — no new tool needed. Only two genuine gaps remained for cycling-coaching coverage on lean:
-
-- `get_athlete_mmp_model` — CP / W' / pMax / FTP estimate from the mean-maximal-power curve. Single most important capacity-progression signal across a training block; not derivable from any other tool already in lean.
-- `get_activity_interval_stats` — interval-fade analysis (interval N vs interval 1) when investigating whether you held power across a hard set.
-
-Lean now exposes **30 tools** (~11.5 k tokens), still ~74 % savings vs full (~44 k tokens). No additions to `full` (these were already there).
-
-Dropped from the proposal: `get_activity_time_at_hr` (redundant with `polarization_index` scalar already in lean), `get_activity_power_vs_hr` (redundant with `decoupling` scalar already in lean).
-
-### Fixed
-
-- **`format_best_efforts`** — formatter rewritten against the live OpenAPI `Effort` schema (`{ start_index, end_index, average, duration, distance }`). The previous formatter expected `type` / `value` / `watts` / `bpm` / `activity_id` / `time_ago` — none of which the API returns, which is why every field rendered as `—`. Test fixture rewritten to use the real shape; assertions updated.
-- **`manifest.json`** — migrated from old `dxt_version: "0.1"` to current `manifest_version: "0.3"` (verified against live spec at https://github.com/modelcontextprotocol/mcpb). Added `compatibility.runtimes.python: ">=3.12"` and a `uv` prerequisite paragraph in `long_description` so users know what to install before opening the bundle.
+_Nothing yet._
 
 ## [1.2.0] — 2026-04-27
 
+First public release of the fork. MCPB-installable Claude Desktop extension shipped on this tag.
+
 ### Added
 
-- **Aggregator tool** `get_activity_full_report` — fetches 8 per-activity endpoints in parallel (details, intervals, messages, power curve, HR curve, best efforts, segments, weather; streams optional) and returns a single consolidated markdown report. Trades one tool's worth of schema (~1.4k tokens) for ~7 saved tool-call decisions in the post-workout debrief workflow. Per-section failures surface inline as `_(unavailable: ...)_` without cancelling the rest of the report.
-- New `tools/aggregators.py` module + the `Aggregators` domain in the inventory table.
-- `create_manual_activity` added to the `lean` profile so logging an after-the-fact session ("just rode 60 min Z2 outside") works without flipping to `full`.
+- **Aggregator tool** `get_activity_full_report` — fetches 8 per-activity endpoints in parallel (details, intervals, messages, power curve, HR curve, best efforts, segments, weather; streams optional) and returns a single consolidated markdown report. Trades one tool's worth of schema (~1.4 k tokens) for ~7 saved tool-call decisions in the post-workout debrief workflow. Per-section failures surface inline as `_(unavailable: ...)_` without cancelling the rest of the report.
+- New `tools/aggregators.py` module + an `Aggregators` domain in the inventory table.
+- `create_manual_activity` added to `lean` so logging an after-the-fact session works without flipping to `full`.
+- **Cycling-coaching gap-fillers in lean (research-driven).** After a skeptical research subagent reviewed Coggan/Friel/TrainingPeaks/Skiba primary sources, 95 % of per-workout coaching scalars (TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL) were confirmed to already be exposed as fields on `get_activity_details` — no extra tools needed. Two genuine gaps filled:
+  - `get_athlete_mmp_model` — CP / W' / pMax / FTP estimate from the MMP curve. Single most important capacity-progression signal across a training block.
+  - `get_activity_interval_stats` — interval-fade analysis (interval N vs interval 1) for hard sets.
+
+  Dropped from the proposal: `get_activity_time_at_hr` (redundant with `polarization_index` scalar) and `get_activity_power_vs_hr` (redundant with `decoupling` scalar).
 
 ### Changed
 
-- Lean profile now exposes **28 tools** (was 26), ~10.9k tokens of schema (was ~9.5k). Full profile is **134 tools** (was 133). Net savings vs full still ~75% / ~33k tokens per turn.
-- README + manifest + AITrainer/CLAUDE.md updated to reflect new lean tool list and the aggregator's capabilities.
+- Lean profile final state: **30 tools, ~11.5 k tokens** of schema. Full profile: **134 tools, ~43.9 k tokens**. Savings on lean: ~32 k tokens (~74 %) per turn.
+- README + manifest + `AITrainer/CLAUDE.md` synced to the final lean list.
+
+### Fixed
+
+- **`format_best_efforts`** — formatter rewritten against the live OpenAPI `Effort` schema (`{ start_index, end_index, average, duration, distance }`). The previous formatter expected `type` / `value` / `watts` / `bpm` / `activity_id` / `time_ago` — none of which the API returns, which is why every field rendered as `—`. Test fixture rewritten to use the real shape; assertions updated. Stream context is now threaded from `find_best_efforts` so the avg-column unit label (W / bpm / m/s / rpm) is correct per stream type.
+- **`manifest.json`** — migrated from old `dxt_version: "0.1"` to current `manifest_version: "0.3"` (verified against live spec at https://github.com/modelcontextprotocol/mcpb). Added a `uv` prerequisite paragraph in `long_description` so users know what to install before opening the bundle.
+- **MCPB install blocked by Python pre-flight** — initially added `compatibility.runtimes.python: ">=3.12"` per a research subagent's recommendation, but real Desktop install surfaced "Python >=3.12 required" because that field triggers a host-Python pre-flight, which is the wrong target for `uv`-driven bundles (they auto-provision their own Python from `pyproject.toml`'s `requires-python`). Removed the field. Bundle rebuilt; final SHA-256 `fdf56d53...07ca08a`.
 
 ## [1.1.0] — 2026-04-27
 
