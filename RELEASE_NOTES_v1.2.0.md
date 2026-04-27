@@ -26,7 +26,7 @@ Pick `lean` if you're using this through Claude Desktop or Claude Code as a dail
 ## Compatibility
 
 - **OS**: macOS, Linux, Windows.
-- **Python**: 3.12 or higher. Auto-resolved by `uv` when launched via the bundle; no manual venv needed.
+- **Python**: 3.12+ — but you do NOT need to install it yourself. `uv` auto-provisions a matching interpreter on first run (per `pyproject.toml`'s `requires-python` constraint). The manifest deliberately omits `compatibility.runtimes.python` because that field triggers a Claude-Desktop pre-flight check against the **host** Python, which is irrelevant for `uv`-driven bundles and would block installs on systems whose host Python is older.
 - **Runtime prerequisite**: `uv` must be on PATH. Install with `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS / Linux) or `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows).
 - **MCPB manifest**: `manifest_version: "0.3"` — verified against the live spec at https://github.com/modelcontextprotocol/mcpb.
 
@@ -36,10 +36,10 @@ Forked from [`mvilanova/intervals-mcp-server`](https://github.com/mvilanova/inte
 
 ## Checksums
 
-Bundle: `intervals-icu-jan-1.2.0.mcpb` — 230 KB (62 files; verified clean of `.git`, `.venv`, `__pycache__`, `.env*`, `audit.log`, `tests/`).
+Bundle: `intervals-icu-jan-1.2.0.mcpb` — 231 KB (62 files; verified clean of `.git`, `.venv`, `__pycache__`, `.env*`, `audit.log`, `tests/`).
 
 ```
-SHA-256: 03b52444b5b08b18ca08c25d4360e70bf1ba787e3921a2a06f1ab4c89c5a4de2
+SHA-256: fdf56d53fb485420b34452e996831fe77478290654db75f179865801d07ca08a
 ```
 
 Verify before installing:

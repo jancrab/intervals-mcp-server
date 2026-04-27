@@ -75,6 +75,7 @@ Expected: the lean profile is active (30 tools), and `mcp__intervals-icu-jan__ge
   Restart Desktop after install so it picks up the new PATH.
 - **API key rejected (HTTP 401).** Regenerate the key at intervals.icu → Settings → Developer Settings, then update the value in Settings → Extensions → `intervals-icu-jan` and restart Desktop.
 - **Tool count is 134 when you expected 30.** `INTERVALS_PROFILE` is set to `full` in extension settings. Open Settings → Extensions → `intervals-icu-jan` → **Tool profile** → type `lean` → save → restart Desktop.
+- **Install dialog says "Python >=3.12" required.** This means your `manifest.json` has `compatibility.runtimes.python` set, which makes Claude Desktop pre-flight-check the **host** Python — but `uv`-driven bundles don't use host Python (they auto-provision their own per `pyproject.toml`). The shipped v1.2.0 bundle has this field removed; if you built an earlier `.mcpb` locally, rebuild after pulling `main` or remove the `runtimes.python` line from your manifest before packing.
 
 ### B. Claude Code — `.mcp.json` in your project
 

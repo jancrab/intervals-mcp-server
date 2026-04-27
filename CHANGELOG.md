@@ -4,6 +4,10 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 ## [Unreleased]
 
+### Fixed — MCPB install blocked by Python pre-flight
+
+- Removed `compatibility.runtimes.python` from `manifest.json`. That field made Claude Desktop pre-flight-check the **host** Python interpreter — surfaced as "Python >=3.12 required" during install — but `uv`-driven bundles never use host Python. They auto-provision a matching interpreter from `pyproject.toml`'s `requires-python` constraint. The pre-flight check was both wrong (we don't use host Python) and harmful (blocked installs on systems with older host Python despite `uv` handling it transparently). Bundle SHA-256 changed accordingly. Caught during the first real Desktop smoke install — pre-release fix, no downstream users affected.
+
 ### Added — Cycling-coaching gap-fillers in lean (research-driven)
 
 After a skeptical research subagent reviewed the cycling literature (Coggan TSS/NP/IF papers, TrainingPeaks Performance Manager, Friel aerobic-decoupling 5%/10% rule, Skiba CP literature) and challenged my proposed lean additions, the conclusion was that 95% of per-workout coaching scalars (TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL) are **already exposed as fields on `get_activity_details`** — no new tool needed. Only two genuine gaps remained for cycling-coaching coverage on lean:
