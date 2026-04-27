@@ -230,6 +230,9 @@ from intervals_mcp_server.tools.file_ops import (  # pylint: disable=wrong-impor
     upload_activity,
     upload_activity_streams_csv,
 )
+from intervals_mcp_server.tools.aggregators import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_activity_full_report,
+)
 from intervals_mcp_server.tools.profile import apply_profile  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Apply profile gate AFTER all tool modules have registered their tools.
@@ -384,6 +387,8 @@ __all__ = [
     "download_activity_fit_files",
     "download_workout",
     "download_workout_for_athlete",
+    # aggregators (lean-profile fat-tools)
+    "get_activity_full_report",
 ]
 
 

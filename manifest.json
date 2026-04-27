@@ -2,9 +2,9 @@
   "dxt_version": "0.1",
   "name": "intervals-icu-jan",
   "display_name": "intervals.icu (jan fork)",
-  "version": "1.0.0",
-  "description": "intervals.icu MCP server — 133 tools across 16 domains. Lean profile (default) exposes 26 high-value tools (~9.5k tokens); set INTERVALS_PROFILE=full for the full surface (~43k tokens). Forked from mvilanova/intervals-mcp-server.",
-  "long_description": "Model Context Protocol server exposing the intervals.icu REST API for personal use. Covers activities (CRUD, analytics, search), events (calendar CRUD + bulk ops), wellness (read + locked-aware writes), workout templates, sport settings, gear + reminders, athlete profile + training plan, weather, routes, and file operations (FIT/GPX/ZWO/MRC/ERG/TCX uploads + downloads). Two profiles: `lean` (default — 26 tools, ~9.5k tokens of tool schema, sized for Claude Desktop) and `full` (133 tools, ~43k tokens, full SDK coverage). Each write tool is gated by `permissions.ask` in Claude Code; wellness writes default `locked: true` to survive Oura/Garmin sync.",
+  "version": "1.2.0",
+  "description": "intervals.icu MCP server — 134 tools across 17 domains. Lean profile (default) exposes 28 high-value tools (~11k tokens) including the get_activity_full_report aggregator; set INTERVALS_PROFILE=full for the full surface (~44k tokens). Forked from mvilanova/intervals-mcp-server.",
+  "long_description": "Model Context Protocol server exposing the intervals.icu REST API for personal use. Covers activities (CRUD, analytics, search), events (calendar CRUD + bulk ops), wellness (read + locked-aware writes), workout templates, sport settings, gear + reminders, athlete profile + training plan, weather, routes, file operations (FIT/GPX/ZWO/MRC/ERG/TCX uploads + downloads), and a cross-domain aggregator (`get_activity_full_report`) that fetches 8 endpoints in parallel and returns one consolidated markdown report. Two profiles: `lean` (default — 28 tools, ~11k tokens of tool schema, sized for Claude Desktop) and `full` (134 tools, ~44k tokens, full SDK coverage). Each write tool is gated by `permissions.ask` in Claude Code; wellness writes default `locked: true` to survive Oura/Garmin sync.",
   "author": {
     "name": "Jan",
     "url": "https://github.com/jancrab/intervals-mcp-server"
@@ -69,7 +69,7 @@
     "profile": {
       "type": "string",
       "title": "Tool profile",
-      "description": "lean = 26 high-value tools (~9.5k tokens of tool schema, recommended for Claude Desktop). full = all 133 tools (~43k tokens, recommended for power users / SDK-style scripting).",
+      "description": "lean = 28 high-value tools (~11k tokens of tool schema, includes get_activity_full_report aggregator + create_manual_activity + download_workout, recommended for Claude Desktop). full = all 134 tools (~44k tokens, recommended for power users / SDK-style scripting).",
       "default": "lean",
       "required": false
     },

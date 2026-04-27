@@ -160,6 +160,9 @@ from intervals_mcp_server.tools.file_ops import (  # noqa: F401
     upload_activity,
     upload_activity_streams_csv,
 )
+from intervals_mcp_server.tools.aggregators import (  # noqa: F401
+    get_activity_full_report,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -316,4 +319,6 @@ __all__ = [
     "download_activity_fit_files",
     "download_workout",
     "download_workout_for_athlete",
+    # aggregators (lean-profile fat-tools)
+    "get_activity_full_report",
 ]

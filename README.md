@@ -10,14 +10,30 @@ MCP tool catalogs cost context tokens on every turn — the full 133-tool surfac
 
 | Profile | Tools | Schema tokens (measured) | Use when |
 |---|---|---|---|
-| **`lean`** (default) | 26 | ~9,514 | You want a working AI training partner without paying 25% of your context window. Covers the four core workflows (daily readiness, weekly planning, post-workout debrief, strength logging) plus Zwift workout export (`download_workout`). |
-| **`full`** | 133 | ~43,089 | You want SDK-style coverage of every endpoint — bulk imports, gear management, custom dashboard items, weather config, OAuth disconnect, etc. |
+| **`lean`** (default) | 28 | ~10,915 | You want a working AI training partner without paying 25% of your context window. Covers the four core workflows (daily readiness, weekly planning, post-workout debrief, strength logging), manual activity creation, Zwift workout export, and a fat aggregator (`get_activity_full_report`). |
+| **`full`** | 134 | ~43,863 | You want SDK-style coverage of every endpoint — bulk imports, gear management, custom dashboard items, weather config, OAuth disconnect, etc. |
 
-**Saving from running lean: ~33,575 tokens (~78%) on every turn.**
+**Saving from running lean: ~33,000 tokens (~75%) on every turn.**
 
 Set `INTERVALS_PROFILE=full` in your `.env`, your `.mcp.json`'s `env` block, or the DXT user-config UI to switch. Anything other than the literal string `full` (case-insensitive) is treated as `lean`, so a typo can't accidentally expose 5× the surface area. The server logs the active profile + tool count at startup.
 
-Lean tool list (26): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details`, `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, `download_workout`. The full set is everything in the inventory table below.
+Lean tool list (28): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details`, `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `create_manual_activity`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, **`get_activity_full_report`**, `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, **`download_workout`**. The full set is everything in the inventory table below.
+
+### Fat aggregator: `get_activity_full_report`
+
+A single tool that fetches **8 endpoints in parallel** for one activity and returns a consolidated multi-section markdown report:
+
+- Activity details (pace / power / HR / TSS / IF / etc.)
+- Interval breakdown
+- Coach messages
+- Power curve
+- HR curve
+- Best efforts (default `watts` / 5 min, configurable)
+- Segments (toggleable)
+- Weather summary (toggleable)
+- 1 Hz streams (off by default — large)
+
+Designed for the post-workout debrief workflow where the model would otherwise call 8 tools sequentially. Trade: one tool's worth of schema cost (~1,400 tokens) for parallel-fetch wall-clock and ~7 saved tool-call decisions per debrief. Per-section failures surface as `_(unavailable: ...)_` inline without poisoning the rest of the report.
 
 ## Quick install
 
@@ -64,7 +80,7 @@ setx INTERVALS_ATHLETE_ID "i12345"
 # macOS/Linux:  export INTERVALS_API_KEY=... ; add to ~/.zshrc
 ```
 
-Restart Claude Code. The 26 lean-profile tools become available as `mcp__intervals-icu-jan__*` (or all 133 if you add `"INTERVALS_PROFILE": "full"` to the `env` block above).
+Restart Claude Code. The 28 lean-profile tools become available as `mcp__intervals-icu-jan__*` (or all 134 if you add `"INTERVALS_PROFILE": "full"` to the `env` block above).
 
 For per-tool write confirmations (recommended), add `permissions.ask` rules — the AITrainer repo at `../` ships a complete example covering all 61 write tools (sport-settings writes, wellness writes, event bulk ops, gear writes, athlete updates, etc.).
 
@@ -95,9 +111,9 @@ File location:
 - Windows (standard): `%APPDATA%\Claude\claude_desktop_config.json`
 - Windows (Microsoft Store): `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\claude_desktop_config.json`
 
-## Tool inventory (133 across 16 domains)
+## Tool inventory (134 across 17 domains)
 
-This table lists the **full** profile. The `lean` profile (default) exposes the 26 tools enumerated above.
+This table lists the **full** profile. The `lean` profile (default) exposes the 28 tools enumerated above.
 
 | Domain | Read tools | Write tools |
 |---|---|---|
@@ -117,8 +133,9 @@ This table lists the **full** profile. The `lean` profile (default) exposes the 
 | **Shared events** | `get_shared_event` | — |
 | **OAuth** | — | `disconnect_app` |
 | **File ops** (multipart + binary) | `download_activity_file`, `download_activity_fit_file`, `download_activity_gpx_file`, `download_workout`, `download_workout_for_athlete` | `upload_activity`, `upload_activity_streams_csv`, `import_workout_file`, `download_activity_fit_files` (POST-with-body bundle download) |
+| **Aggregators** (cross-domain fat-tools) | `get_activity_full_report` (8 parallel subcalls → one consolidated markdown report) | — |
 
-Total: **133 tools** in `full`, **26** in `lean`. Run `INTERVALS_PROFILE=full uv run python -c "from intervals_mcp_server.server import mcp; import asyncio; print(len(asyncio.run(mcp.list_tools())))"` to get the live count.
+Total: **134 tools** in `full`, **28** in `lean`. Run `INTERVALS_PROFILE=full uv run python -c "from intervals_mcp_server.server import mcp; import asyncio; print(len(asyncio.run(mcp.list_tools())))"` to get the live count.
 
 ### Zwift / ERG / MRC workout export
 

@@ -6,6 +6,19 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.2.0] — 2026-04-27
+
+### Added
+
+- **Aggregator tool** `get_activity_full_report` — fetches 8 per-activity endpoints in parallel (details, intervals, messages, power curve, HR curve, best efforts, segments, weather; streams optional) and returns a single consolidated markdown report. Trades one tool's worth of schema (~1.4k tokens) for ~7 saved tool-call decisions in the post-workout debrief workflow. Per-section failures surface inline as `_(unavailable: ...)_` without cancelling the rest of the report.
+- New `tools/aggregators.py` module + the `Aggregators` domain in the inventory table.
+- `create_manual_activity` added to the `lean` profile so logging an after-the-fact session ("just rode 60 min Z2 outside") works without flipping to `full`.
+
+### Changed
+
+- Lean profile now exposes **28 tools** (was 26), ~10.9k tokens of schema (was ~9.5k). Full profile is **134 tools** (was 133). Net savings vs full still ~75% / ~33k tokens per turn.
+- README + manifest + AITrainer/CLAUDE.md updated to reflect new lean tool list and the aggregator's capabilities.
+
 ## [1.1.0] — 2026-04-27
 
 ### Added

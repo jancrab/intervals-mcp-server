@@ -59,6 +59,8 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "get_activity_intervals",       # interval-level breakdown
         "search_for_activities",        # query by criteria
         "list_activities_around",       # nearby activities by id
+        # --- Activities (write) -------------------------------------------
+        "create_manual_activity",       # log a session manually (no FIT/GPX file)
         # --- Activity messages (coach comments) ---------------------------
         "get_activity_messages",
         "add_activity_message",
@@ -66,6 +68,10 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "get_activity_power_curve",
         "get_activity_hr_curve",
         "find_best_efforts",
+        # --- Aggregators (one tool, many endpoints in parallel) ----------
+        # Trades wall-clock for context — replaces 8 individual calls in
+        # post-workout debrief workflow with one fat fetch.
+        "get_activity_full_report",
         # --- Events (planned workouts, races) -----------------------------
         "get_events",
         "get_event_by_id",
