@@ -65,9 +65,22 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "get_activity_messages",
         "add_activity_message",
         # --- Activity analytics (high-value for debrief) ------------------
+        # NOTE: TSS / IF / NP / VI / EF / kJ / decoupling / polarization /
+        # CTL / ATL are already scalar fields on `get_activity_details` —
+        # no separate tool needed. Per Coggan/Friel literature
+        # (TrainingPeaks), those + the curves/best-efforts below cover
+        # everything load-bearing for per-workout judging.
         "get_activity_power_curve",
         "get_activity_hr_curve",
         "find_best_efforts",
+        "get_activity_interval_stats",  # interval-fade analysis (interval N vs interval 1)
+        # --- Athlete-level performance models -----------------------------
+        # MMP-curve evolution → CP / W' / pMax / FTP estimate. The single
+        # most important capacity-progression signal across a training
+        # block (Coggan WKO, Skiba CP literature). Cited as #1 must-add by
+        # the cycling-research subagent challenge — no other tool produces
+        # CP or W' from your data.
+        "get_athlete_mmp_model",
         # --- Aggregators (one tool, many endpoints in parallel) ----------
         # Trades wall-clock for context — replaces 8 individual calls in
         # post-workout debrief workflow with one fat fetch.

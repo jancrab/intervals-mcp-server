@@ -469,11 +469,36 @@ def format_segments(payload: Any) -> str:
     return "\n".join(lines)
 
 
-def format_best_efforts(payload: Any) -> str:
+def format_best_efforts(payload: Any, stream: str | None = None) -> str:
+    """
+    Render the response from `GET /activity/{id}/best-efforts`.
+
+    The live OpenAPI `Effort` schema (verified 2026-04-27) is:
+    `{ start_index: int, end_index: int, average: float,
+       duration: int (seconds), distance: float (meters) }`
+    Wrapped in `{ "efforts": [Effort, ...] }`.
+
+    `average`'s units depend on the queried `stream`:
+    - `watts` → W   (cycling power)
+    - `heartrate` → bpm
+    - `pace` → m/s  (we display as min/km in addition for legibility)
+    - `cadence` → rpm
+    - `velocity_smooth` → m/s
+
+    The earlier formatter expected `type` / `value` / `watts` / `bpm` /
+    `activity_id` / `time_ago` — none of which the API returns. Fixed here.
+
+    Args:
+        payload: Raw API response. Either a dict with `efforts` key, or
+            a bare list (defensive — earlier intervals.icu versions returned
+            the bare list).
+        stream: Optional. The stream name passed to `find_best_efforts`
+            (`watts`, `heartrate`, `pace`, etc.). Used to label units.
+            If omitted, the formatter falls back to a generic header.
+    """
     if payload is None:
         return "No best-effort data."
     if isinstance(payload, dict):
-        # Sometimes wrapped as {efforts: [...]}.
         items = payload.get("efforts") or payload.get("data") or []
     elif isinstance(payload, list):
         items = payload
@@ -483,20 +508,40 @@ def format_best_efforts(payload: Any) -> str:
     if not items:
         return "No best-effort data."
 
-    lines = [f"## Best efforts ({len(items)})", ""]
-    lines.append("| Type | Duration | Value | Activity ID | Time ago |")
+    # Pick the unit label for the `average` column based on the stream.
+    stream_norm = (stream or "").strip().lower()
+    unit_map = {
+        "watts": "W",
+        "power": "W",
+        "heartrate": "bpm",
+        "hr": "bpm",
+        "cadence": "rpm",
+        "pace": "m/s",
+        "velocity_smooth": "m/s",
+        "speed": "m/s",
+    }
+    unit = unit_map.get(stream_norm, "")
+    avg_label = f"Avg ({unit})" if unit else "Avg"
+    stream_label = stream or "stream"
+
+    lines = [f"## Best efforts — {stream_label} ({len(items)})", ""]
+    lines.append(f"| Duration | Distance (m) | {avg_label} | Start idx | End idx |")
     lines.append("|---|---|---|---|---|")
     for e in items[:_MAX_TABLE_ROWS]:
         if not isinstance(e, dict):
             continue
-        dur = e.get("duration") or e.get("secs") or e.get("time")
+        duration = e.get("duration")
+        distance = e.get("distance")
+        average = e.get("average")
+        start_idx = e.get("start_index")
+        end_idx = e.get("end_index")
         lines.append(
-            "| {t} | {d} | {v} | {aid} | {ta} |".format(
-                t=e.get("type", "—"),
-                d=_fmt_secs(dur) if dur is not None else "—",
-                v=_fmt_num(e.get("value") or e.get("watts") or e.get("bpm")),
-                aid=e.get("activity_id", "—"),
-                ta=e.get("time_ago", "—"),
+            "| {d} | {dist} | {avg} | {si} | {ei} |".format(
+                d=_fmt_secs(duration) if duration is not None else "—",
+                dist=_fmt_num(distance) if distance is not None else "—",
+                avg=_fmt_num(average) if average is not None else "—",
+                si=start_idx if start_idx is not None else "—",
+                ei=end_idx if end_idx is not None else "—",
             )
         )
     if len(items) > _MAX_TABLE_ROWS:

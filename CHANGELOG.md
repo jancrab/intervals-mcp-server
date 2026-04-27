@@ -4,7 +4,21 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added — Cycling-coaching gap-fillers in lean (research-driven)
+
+After a skeptical research subagent reviewed the cycling literature (Coggan TSS/NP/IF papers, TrainingPeaks Performance Manager, Friel aerobic-decoupling 5%/10% rule, Skiba CP literature) and challenged my proposed lean additions, the conclusion was that 95% of per-workout coaching scalars (TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL) are **already exposed as fields on `get_activity_details`** — no new tool needed. Only two genuine gaps remained for cycling-coaching coverage on lean:
+
+- `get_athlete_mmp_model` — CP / W' / pMax / FTP estimate from the mean-maximal-power curve. Single most important capacity-progression signal across a training block; not derivable from any other tool already in lean.
+- `get_activity_interval_stats` — interval-fade analysis (interval N vs interval 1) when investigating whether you held power across a hard set.
+
+Lean now exposes **30 tools** (~11.5 k tokens), still ~74 % savings vs full (~44 k tokens). No additions to `full` (these were already there).
+
+Dropped from the proposal: `get_activity_time_at_hr` (redundant with `polarization_index` scalar already in lean), `get_activity_power_vs_hr` (redundant with `decoupling` scalar already in lean).
+
+### Fixed
+
+- **`format_best_efforts`** — formatter rewritten against the live OpenAPI `Effort` schema (`{ start_index, end_index, average, duration, distance }`). The previous formatter expected `type` / `value` / `watts` / `bpm` / `activity_id` / `time_ago` — none of which the API returns, which is why every field rendered as `—`. Test fixture rewritten to use the real shape; assertions updated.
+- **`manifest.json`** — migrated from old `dxt_version: "0.1"` to current `manifest_version: "0.3"` (verified against live spec at https://github.com/modelcontextprotocol/mcpb). Added `compatibility.runtimes.python: ">=3.12"` and a `uv` prerequisite paragraph in `long_description` so users know what to install before opening the bundle.
 
 ## [1.2.0] — 2026-04-27
 

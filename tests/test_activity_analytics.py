@@ -158,10 +158,14 @@ SAMPLE_SEGMENTS = [
     },
 ]
 
-SAMPLE_BEST_EFFORTS = [
-    {"type": "watts", "duration": 60, "value": 300, "activity_id": "i1", "time_ago": "today"},
-    {"type": "watts", "duration": 300, "value": 250, "activity_id": "i1", "time_ago": "today"},
-]
+# Real API shape per OpenAPI BestEfforts/Effort schemas (verified live 2026-04-27):
+#   { "efforts": [ { start_index, end_index, average, duration, distance } ] }
+SAMPLE_BEST_EFFORTS = {
+    "efforts": [
+        {"start_index": 100, "end_index": 160, "average": 300.5, "duration": 60, "distance": 480.0},
+        {"start_index": 200, "end_index": 500, "average": 250.0, "duration": 300, "distance": 2350.0},
+    ]
+}
 
 SAMPLE_MAP = {
     "bounds": [[-11.688997, 166.90335], [-11.664228, 166.94757]],
@@ -369,7 +373,10 @@ def test_find_best_efforts_happy(monkeypatch):
 
     _patch_request(monkeypatch, fake_request)
     out = asyncio.run(find_best_efforts(activity_id="i1", duration=300))
-    assert "Best efforts (2)" in out
+    # Header now includes the stream label per fixed formatter (2026-04-27)
+    assert "Best efforts" in out and "watts" in out and "(2)" in out
+    # Verify real API fields rendered: average + duration + indices
+    assert "300.5" in out and "1:00" in out and "100" in out
     assert captured["params"] == {"stream": "watts", "duration": 300}
 
 

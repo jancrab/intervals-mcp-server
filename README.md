@@ -10,14 +10,14 @@ MCP tool catalogs cost context tokens on every turn — the full 133-tool surfac
 
 | Profile | Tools | Schema tokens (measured) | Use when |
 |---|---|---|---|
-| **`lean`** (default) | 28 | ~10,915 | You want a working AI training partner without paying 25% of your context window. Covers the four core workflows (daily readiness, weekly planning, post-workout debrief, strength logging), manual activity creation, Zwift workout export, and a fat aggregator (`get_activity_full_report`). |
+| **`lean`** (default) | 30 | ~11,561 | You want a working AI training partner without paying 25% of your context window. Covers the four core workflows (daily readiness, weekly planning, post-workout debrief, strength logging), manual activity creation, Zwift workout export, the `get_activity_full_report` aggregator, plus full cycling-coaching coverage (CP/W'/MMP via `get_athlete_mmp_model`, interval-fade via `get_activity_interval_stats`). |
 | **`full`** | 134 | ~43,863 | You want SDK-style coverage of every endpoint — bulk imports, gear management, custom dashboard items, weather config, OAuth disconnect, etc. |
 
-**Saving from running lean: ~33,000 tokens (~75%) on every turn.**
+**Saving from running lean: ~32,300 tokens (~74%) on every turn.**
 
 Set `INTERVALS_PROFILE=full` in your `.env`, your `.mcp.json`'s `env` block, or the DXT user-config UI to switch. Anything other than the literal string `full` (case-insensitive) is treated as `lean`, so a typo can't accidentally expose 5× the surface area. The server logs the active profile + tool count at startup.
 
-Lean tool list (28): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details`, `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `create_manual_activity`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, **`get_activity_full_report`**, `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, **`download_workout`**. The full set is everything in the inventory table below.
+Lean tool list (30): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, **`get_athlete_mmp_model`** (CP / W' / pMax / FTP from MMP curve), `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details` (already exposes TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL as scalar fields), `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `create_manual_activity`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, **`get_activity_interval_stats`** (interval-fade analysis), **`get_activity_full_report`** (8-endpoint parallel aggregator), `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, **`download_workout`**. The full set is everything in the inventory table below.
 
 ### Fat aggregator: `get_activity_full_report`
 

@@ -620,7 +620,7 @@ async def find_best_efforts(
     )
     if _is_error(result):
         return _error_message(result, "fetching best efforts")  # type: ignore[arg-type]
-    return format_best_efforts(result)
+    return format_best_efforts(result, stream=stream)
 
 
 # ===========================================================================
