@@ -219,6 +219,22 @@ from intervals_mcp_server.tools.athlete_extras import (  # pylint: disable=wrong
     update_athlete_training_plan,
     update_weather_config,
 )
+from intervals_mcp_server.tools.file_ops import (  # pylint: disable=wrong-import-position  # noqa: E402
+    download_activity_file,
+    download_activity_fit_file,
+    download_activity_fit_files,
+    download_activity_gpx_file,
+    download_workout,
+    download_workout_for_athlete,
+    import_workout_file,
+    upload_activity,
+    upload_activity_streams_csv,
+)
+from intervals_mcp_server.tools.profile import apply_profile  # pylint: disable=wrong-import-position  # noqa: E402
+
+# Apply profile gate AFTER all tool modules have registered their tools.
+# Lean (default) keeps ~26 tools; full keeps all 133. See tools/profile.py.
+apply_profile(mcp, config.profile)
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -358,6 +374,16 @@ __all__ = [
     "get_weather_forecast",
     "get_shared_event",
     "disconnect_app",
+    # file_ops (Wave 5)
+    "upload_activity",
+    "upload_activity_streams_csv",
+    "import_workout_file",
+    "download_activity_file",
+    "download_activity_fit_file",
+    "download_activity_gpx_file",
+    "download_activity_fit_files",
+    "download_workout",
+    "download_workout_for_athlete",
 ]
 
 

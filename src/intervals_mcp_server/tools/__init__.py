@@ -149,6 +149,17 @@ from intervals_mcp_server.tools.athlete_extras import (  # noqa: F401
     update_athlete_training_plan,
     update_weather_config,
 )
+from intervals_mcp_server.tools.file_ops import (  # noqa: F401
+    download_activity_file,
+    download_activity_fit_file,
+    download_activity_fit_files,
+    download_activity_gpx_file,
+    download_workout,
+    download_workout_for_athlete,
+    import_workout_file,
+    upload_activity,
+    upload_activity_streams_csv,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -295,4 +306,14 @@ __all__ = [
     "get_weather_forecast",
     "get_shared_event",
     "disconnect_app",
+    # file_ops (Wave 5)
+    "upload_activity",
+    "upload_activity_streams_csv",
+    "import_workout_file",
+    "download_activity_file",
+    "download_activity_fit_file",
+    "download_activity_gpx_file",
+    "download_activity_fit_files",
+    "download_workout",
+    "download_workout_for_athlete",
 ]

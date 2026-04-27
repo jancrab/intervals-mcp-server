@@ -1,8 +1,154 @@
-# Intervals.icu MCP Server
+# Intervals.icu MCP Server (jancrab fork)
 
-Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
+Model Context Protocol (MCP) server for the [intervals.icu](https://intervals.icu) training-platform API. Personal-use scope. Forked from [`mvilanova/intervals-mcp-server`](https://github.com/mvilanova/intervals-mcp-server) (which provides the architectural base + 17 core tools); this fork extends to **133 tools across 16 domains**, covering effectively every read/write the authenticated athlete can perform.
 
-If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
+> If you're looking at the upstream's 17 tools and need full coverage of activity analytics, sport settings, gear, routes, weather, athlete updates, workout templates, wellness writes, event bulk ops, and file uploads/downloads — that's what this fork adds. See [`CHANGELOG.md`](./CHANGELOG.md) for the wave-by-wave breakdown.
+
+## Two profiles: `lean` (default) vs `full`
+
+MCP tool catalogs cost context tokens on every turn — the full 133-tool surface is ~43k tokens of schema, which dominates short Claude Desktop sessions. The server therefore ships two profiles, switchable via the `INTERVALS_PROFILE` env var:
+
+| Profile | Tools | Schema tokens (measured) | Use when |
+|---|---|---|---|
+| **`lean`** (default) | 26 | ~9,514 | You want a working AI training partner without paying 25% of your context window. Covers the four core workflows (daily readiness, weekly planning, post-workout debrief, strength logging) plus Zwift workout export (`download_workout`). |
+| **`full`** | 133 | ~43,089 | You want SDK-style coverage of every endpoint — bulk imports, gear management, custom dashboard items, weather config, OAuth disconnect, etc. |
+
+**Saving from running lean: ~33,575 tokens (~78%) on every turn.**
+
+Set `INTERVALS_PROFILE=full` in your `.env`, your `.mcp.json`'s `env` block, or the DXT user-config UI to switch. Anything other than the literal string `full` (case-insensitive) is treated as `lean`, so a typo can't accidentally expose 5× the surface area. The server logs the active profile + tool count at startup.
+
+Lean tool list (26): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details`, `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, `download_workout`. The full set is everything in the inventory table below.
+
+## Quick install
+
+Three paths, pick whichever fits your workflow:
+
+### A. Claude Desktop — DXT one-click (recommended)
+
+The fork ships a [DXT extension manifest](./manifest.json) so Claude Desktop can install the server with a single double-click.
+
+1. Clone this repo and run `uv sync` to install Python deps.
+2. Package the directory as a `.dxt` archive (Claude Desktop's developer mode → "Build extension" pointing at this folder, or zip the directory and rename the extension to `.dxt`).
+3. Double-click the `.dxt` file. Claude Desktop pops a config dialog for your **API key** and **athlete ID** (sensitive fields handled via OS keychain).
+4. Restart Claude Desktop. The server appears in your MCP list.
+
+DXT does the wiring + env-var injection; you don't edit `claude_desktop_config.json` by hand.
+
+### B. Claude Code — `.mcp.json` in your project
+
+Drop this into your project's `.mcp.json` (or merge into `~/.claude/settings.json`'s `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "intervals-icu-jan": {
+      "command": "uv",
+      "args": [
+        "--directory", "/absolute/path/to/intervals-mcp-server",
+        "run", "python", "-m", "intervals_mcp_server.server"
+      ],
+      "env": {
+        "API_KEY":    "${INTERVALS_API_KEY}",
+        "ATHLETE_ID": "${INTERVALS_ATHLETE_ID}"
+      }
+    }
+  }
+}
+```
+
+Then in your shell:
+
+```bash
+setx INTERVALS_API_KEY    "your-real-key"          # Windows
+setx INTERVALS_ATHLETE_ID "i12345"
+# macOS/Linux:  export INTERVALS_API_KEY=... ; add to ~/.zshrc
+```
+
+Restart Claude Code. The 26 lean-profile tools become available as `mcp__intervals-icu-jan__*` (or all 133 if you add `"INTERVALS_PROFILE": "full"` to the `env` block above).
+
+For per-tool write confirmations (recommended), add `permissions.ask` rules — the AITrainer repo at `../` ships a complete example covering all 61 write tools (sport-settings writes, wellness writes, event bulk ops, gear writes, athlete updates, etc.).
+
+### C. Claude Desktop — manual `claude_desktop_config.json`
+
+Same shape as the Claude Code path above, with literal env values (`${VAR}` substitution is unreliable on Desktop):
+
+```json
+{
+  "mcpServers": {
+    "intervals-icu-jan": {
+      "command": "/Users/<you>/.local/bin/uv",
+      "args": [
+        "--directory", "/path/to/intervals-mcp-server",
+        "run", "python", "-m", "intervals_mcp_server.server"
+      ],
+      "env": {
+        "API_KEY": "sk_live_...",
+        "ATHLETE_ID": "i12345"
+      }
+    }
+  }
+}
+```
+
+File location:
+- macOS/Linux: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows (standard): `%APPDATA%\Claude\claude_desktop_config.json`
+- Windows (Microsoft Store): `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\Claude\claude_desktop_config.json`
+
+## Tool inventory (133 across 16 domains)
+
+This table lists the **full** profile. The `lean` profile (default) exposes the 26 tools enumerated above.
+
+| Domain | Read tools | Write tools |
+|---|---|---|
+| **Activities** (per-activity) | `get_activities`, `get_activity_details`, `get_activity_streams`, `get_activity_intervals`, `get_activity_messages` | `add_activity_message`, `update_activity`, `delete_activity`, `update_activity_streams`, `update_intervals`, `update_interval`, `delete_intervals`, `split_interval` |
+| **Activity analytics** (per-activity) | `find_best_efforts`, `get_activity_*_curve`, `get_activity_*_histogram`, `get_activity_*_load_model`, `get_activity_interval_stats`, `get_activity_segments`, `get_activity_map`, `get_activity_time_at_hr`, `get_activity_weather_summary`, `get_activity_power_spike_model`, `get_activity_power_vs_hr` (17 total) | — |
+| **Athlete-level views** | `get_activities_by_ids`, `list_activities_around`, `get_activities_csv`, `search_for_activities`, `search_for_activities_full`, `search_for_intervals`, `list_activity_tags`, `list_activity_*_curves`, `list_athlete_*_curves`, `get_athlete_power_hr_curve`, `get_athlete_mmp_model` | `create_manual_activity`, `create_multiple_manual_activities` |
+| **Events** (planned workouts) | `get_events`, `get_event_by_id`, `list_event_tags` | `add_or_update_event`, `delete_event`, `delete_events_by_date_range`, `delete_events_bulk`, `mark_event_as_done`, `apply_plan`, `create_multiple_events`, `duplicate_events`, `update_events_in_range` |
+| **Wellness** | `get_wellness_data`, `get_wellness_record` | `update_wellness_record`, `update_wellness_record_today`, `update_wellness_records_bulk`, `upload_wellness_csv` (all default `locked: true`) |
+| **Library** (workout templates) | `list_workouts`, `get_workout`, `list_workout_folders`, `list_folder_shared_with`, `list_workout_tags` | `create_workout`, `update_workout`, `create_multiple_workouts`, `delete_workout`, `create_workout_folder`, `update_workout_folder`, `delete_workout_folder`, `update_folder_shared_with`, `update_plan_workouts`, `apply_current_plan_changes`, `duplicate_workouts` |
+| **Sport settings** | `list_sport_settings`, `get_sport_settings`, `list_activities_matching_sport_settings`, `list_pace_distances_for_sport`, `list_pace_distances` | `create_sport_settings`, `update_sport_settings`, `update_sport_settings_multi`, `delete_sport_settings`, `apply_sport_settings_to_activities` |
+| **Gear** | `list_gear`, `recalc_gear_distance` | `create_gear`, `update_gear`, `delete_gear`, `replace_gear`, `create_gear_reminder`, `update_gear_reminder`, `delete_gear_reminder` |
+| **Routes** | `list_athlete_routes`, `get_athlete_route`, `check_route_merge` | `update_athlete_route` |
+| **Athlete profile** | `get_athlete_profile` (full + sportSettings parsed), `get_athlete_basic_profile` (`/profile` subset), `get_athlete_summary`, `get_athlete_settings_for_device`, `get_athlete_training_plan` | `update_athlete`, `update_athlete_plans`, `update_athlete_training_plan` |
+| **Derived views** | `get_fitness_curve` (CTL/ATL/form), `get_ftp_history` (change-points) | — |
+| **Weather** | `get_weather_config`, `get_weather_forecast` | `update_weather_config` |
+| **Custom items** (charts, dashboards) | `get_custom_items`, `get_custom_item_by_id` | `create_custom_item`, `update_custom_item`, `delete_custom_item` |
+| **Shared events** | `get_shared_event` | — |
+| **OAuth** | — | `disconnect_app` |
+| **File ops** (multipart + binary) | `download_activity_file`, `download_activity_fit_file`, `download_activity_gpx_file`, `download_workout`, `download_workout_for_athlete` | `upload_activity`, `upload_activity_streams_csv`, `import_workout_file`, `download_activity_fit_files` (POST-with-body bundle download) |
+
+Total: **133 tools** in `full`, **26** in `lean`. Run `INTERVALS_PROFILE=full uv run python -c "from intervals_mcp_server.server import mcp; import asyncio; print(len(asyncio.run(mcp.list_tools())))"` to get the live count.
+
+### Zwift / ERG / MRC workout export
+
+`download_workout` POSTs a workout document to `/download-workout.{ext}` and returns the converted file. Supported formats: `zwo` (Zwift), `mrc`, `erg`, `fit`. This tool is included in the `lean` profile because it's a high-value direct-user request ("export this Z2 ride for Zwift") that would otherwise force users into `full`.
+
+## Authentication
+
+HTTP Basic auth, **literal** username `API_KEY`, password = your generated API key. Both `API_KEY` and `ATHLETE_ID` env vars are required at server startup; the server fails fast with a clear error if either is missing.
+
+Generate the API key at `intervals.icu` → Settings → Developer Settings.
+Find your athlete ID at `intervals.icu` → Settings, or in your profile URL (e.g. `i12345`).
+
+## Wellness `locked` default — important
+
+The intervals.icu UI lets external services (Oura, Garmin, Whoop, Strava) overwrite wellness fields on sync. To prevent silent overwrites of API-set values, all `update_wellness_*` and `upload_wellness_csv` tools **default `locked: true`** in the request body. Per-record override is supported but the response surfaces a `> WARNING:` line whenever `locked=False` is used.
+
+## License & attribution
+
+GPL-3.0-only (inherited from upstream). Forked from [`mvilanova/intervals-mcp-server`](https://github.com/mvilanova/intervals-mcp-server). All upstream code is preserved unchanged; this fork's additions live in:
+
+- `tools/{athlete,sport_settings,wellness_writes,events_extras,library,activity_analytics,activity_writes,activity_athlete_level,routes_gear,athlete_extras,file_ops}.py` (11 new modules)
+- `utils/formatters_{domain}.py` (9 new formatter modules — duplicated rather than imported from `utils/formatting.py` to avoid concurrency-merge headaches)
+- `tests/test_{domain}.py` (~10 new test modules)
+- `manifest.json` (DXT one-click install)
+- `CHANGELOG.md` (this fork's history)
+- `RECON.md`, `ENDPOINT_INVENTORY.md`, `FULL_API_ROADMAP.md`, `ROADMAP.md` (build notes)
+
+The original upstream README sections follow below for users coming from the upstream documentation.
+
+---
 
 ## Requirements
 

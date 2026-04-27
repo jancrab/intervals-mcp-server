@@ -87,6 +87,7 @@ def test_make_intervals_request_bad_json(monkeypatch, caplog):
             athlete_id="i1",
             intervals_api_base_url="https://intervals.icu/api/v1",
             user_agent="test-agent",
+            profile="lean",
         ),
     )
 

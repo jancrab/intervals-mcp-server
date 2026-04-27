@@ -27,6 +27,7 @@ class Config:
     athlete_id: str
     intervals_api_base_url: str
     user_agent: str
+    profile: str  # "lean" (default, ~26 tools) or "full" (all 133 tools)
 
 
 _config_instance: Config | None = None  # pylint: disable=invalid-name
@@ -47,6 +48,15 @@ def load_config() -> Config:
     intervals_api_base_url = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
     user_agent = "intervalsicu-mcp-server/1.0"
 
+    # Profile gate: "lean" (default) exposes ~26 high-value tools to keep
+    # context cost low for Claude Desktop / DXT installs. "full" exposes all
+    # 133 tools — useful for power users / SDK-style scripting where the
+    # context-cost tradeoff is acceptable. Any value other than "full" is
+    # treated as "lean" so misspellings don't accidentally expose 5x the
+    # surface area.
+    profile_raw = os.getenv("INTERVALS_PROFILE", "lean").strip().lower()
+    profile = "full" if profile_raw == "full" else "lean"
+
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:
         validate_athlete_id(athlete_id)
@@ -56,6 +66,7 @@ def load_config() -> Config:
         athlete_id=athlete_id,
         intervals_api_base_url=intervals_api_base_url,
         user_agent=user_agent,
+        profile=profile,
     )
 
 
