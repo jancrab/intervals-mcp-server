@@ -1,12 +1,12 @@
 # Intervals.icu MCP Server (jancrab fork)
 
-Model Context Protocol (MCP) server for the [intervals.icu](https://intervals.icu) training-platform API. Personal-use scope. Forked from [`mvilanova/intervals-mcp-server`](https://github.com/mvilanova/intervals-mcp-server) (which provides the architectural base + 17 core tools); this fork extends to **133 tools across 16 domains**, covering effectively every read/write the authenticated athlete can perform.
+Model Context Protocol (MCP) server for the [intervals.icu](https://intervals.icu) training-platform API. Personal-use scope. Forked from [`mvilanova/intervals-mcp-server`](https://github.com/mvilanova/intervals-mcp-server) (which provides the architectural base + 17 core tools); this fork extends to **134 tools across 17 domains**, covering effectively every read/write the authenticated athlete can perform.
 
 > If you're looking at the upstream's 17 tools and need full coverage of activity analytics, sport settings, gear, routes, weather, athlete updates, workout templates, wellness writes, event bulk ops, and file uploads/downloads — that's what this fork adds. See [`CHANGELOG.md`](./CHANGELOG.md) for the wave-by-wave breakdown.
 
 ## Two profiles: `lean` (default) vs `full`
 
-MCP tool catalogs cost context tokens on every turn — the full 133-tool surface is ~43k tokens of schema, which dominates short Claude Desktop sessions. The server therefore ships two profiles, switchable via the `INTERVALS_PROFILE` env var:
+MCP tool catalogs cost context tokens on every turn — the full 134-tool surface is ~44k tokens of schema, which dominates short Claude Desktop sessions. The server therefore ships two profiles, switchable via the `INTERVALS_PROFILE` env var:
 
 | Profile | Tools | Schema tokens (measured) | Use when |
 |---|---|---|---|
@@ -15,7 +15,7 @@ MCP tool catalogs cost context tokens on every turn — the full 133-tool surfac
 
 **Saving from running lean: ~32,300 tokens (~74%) on every turn.**
 
-Set `INTERVALS_PROFILE=full` in your `.env`, your `.mcp.json`'s `env` block, or the DXT user-config UI to switch. Anything other than the literal string `full` (case-insensitive) is treated as `lean`, so a typo can't accidentally expose 5× the surface area. The server logs the active profile + tool count at startup.
+Set `INTERVALS_PROFILE=full` in your `.env`, your `.mcp.json`'s `env` block, or the MCPB user-config UI to switch. Anything other than the literal string `full` (case-insensitive) is treated as `lean`, so a typo can't accidentally expose 4-5× the surface area. The server logs the active profile + tool count at startup.
 
 Lean tool list (30): `get_athlete_profile`, `get_athlete_basic_profile`, `get_ftp_history`, **`get_athlete_mmp_model`** (CP / W' / pMax / FTP from MMP curve), `get_wellness_data`, `get_wellness_record`, `update_wellness_record_today`, `get_fitness_curve`, `get_activities`, `get_activity_details` (already exposes TSS / IF / NP / VI / EF / kJ / decoupling / polarization / CTL / ATL as scalar fields), `get_activity_streams`, `get_activity_intervals`, `get_activity_messages`, `add_activity_message`, `search_for_activities`, `list_activities_around`, `create_manual_activity`, `get_activity_power_curve`, `get_activity_hr_curve`, `find_best_efforts`, **`get_activity_interval_stats`** (interval-fade analysis), **`get_activity_full_report`** (8-endpoint parallel aggregator), `get_events`, `get_event_by_id`, `add_or_update_event`, `delete_event`, `mark_event_as_done`, `list_workouts`, `get_workout`, **`download_workout`**. The full set is everything in the inventory table below.
 
@@ -39,16 +39,42 @@ Designed for the post-workout debrief workflow where the model would otherwise c
 
 Three paths, pick whichever fits your workflow:
 
-### A. Claude Desktop — DXT one-click (recommended)
+### A. Claude Desktop — MCPB one-click (recommended)
 
-The fork ships a [DXT extension manifest](./manifest.json) so Claude Desktop can install the server with a single double-click.
+The fork ships an [MCPB extension manifest](./manifest.json) (`manifest_version: "0.3"`) so Claude Desktop can install the server with a single double-click. MCPB is the renamed successor to the old DXT format; the file extension is `.mcpb` and the official packager is [`@anthropic-ai/mcpb`](https://www.npmjs.com/package/@anthropic-ai/mcpb).
 
-1. Clone this repo and run `uv sync` to install Python deps.
-2. Package the directory as a `.dxt` archive (Claude Desktop's developer mode → "Build extension" pointing at this folder, or zip the directory and rename the extension to `.dxt`).
-3. Double-click the `.dxt` file. Claude Desktop pops a config dialog for your **API key** and **athlete ID** (sensitive fields handled via OS keychain).
-4. Restart Claude Desktop. The server appears in your MCP list.
+**Prerequisite: `uv` on PATH.** The bundle launches the server via `uv`, so install it first (see Troubleshooting below if Claude Desktop reports it can't find `uv`).
 
-DXT does the wiring + env-var injection; you don't edit `claude_desktop_config.json` by hand.
+1. **Download** `intervals-icu-jan-1.2.0.mcpb` from the [v1.2.0 release](https://github.com/jancrab/intervals-mcp-server/releases/tag/v1.2.0) on GitHub.
+2. **Double-click** the `.mcpb` file. Claude Desktop opens its install dialog.
+3. **Fill the four user-config fields**:
+   - `api_key` — your intervals.icu API key (marked sensitive in the UI).
+   - `athlete_id` — e.g. `i12345`.
+   - `profile` — free-text. Type `lean` (default, 30 tools) or `full` (134 tools). Anything else is treated as `lean`.
+   - `log_level` — `INFO`, `DEBUG`, etc.
+4. Click **Install**, then **restart Claude Desktop**.
+
+**Verify the install.** Open a new chat and ask:
+
+```
+Show me my last activity.
+```
+
+Expected: the lean profile is active (30 tools), and `mcp__intervals-icu-jan__get_activities` fires. If you switched to `full` you'll see 134 tools available.
+
+**Switching profile post-install.** Settings → Extensions → `intervals-icu-jan` → **Tool profile** → type EXACTLY `full` (or `lean`) → save → restart Desktop. Tool count jumps 30 → 134 (or back).
+
+> **Credential storage note.** The user-config UI marks `api_key` as sensitive, but the underlying storage backend per OS is not documented in the v0.3 spec. Treat the key as semi-public and rotate it periodically at intervals.icu → Settings → Developer Settings.
+
+#### Troubleshooting
+
+- **`uv` not on PATH.** Claude Desktop fails to launch the server.
+  - macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+  - Windows (PowerShell): `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`
+
+  Restart Desktop after install so it picks up the new PATH.
+- **API key rejected (HTTP 401).** Regenerate the key at intervals.icu → Settings → Developer Settings, then update the value in Settings → Extensions → `intervals-icu-jan` and restart Desktop.
+- **Tool count is 134 when you expected 30.** `INTERVALS_PROFILE` is set to `full` in extension settings. Open Settings → Extensions → `intervals-icu-jan` → **Tool profile** → type `lean` → save → restart Desktop.
 
 ### B. Claude Code — `.mcp.json` in your project
 
@@ -80,7 +106,7 @@ setx INTERVALS_ATHLETE_ID "i12345"
 # macOS/Linux:  export INTERVALS_API_KEY=... ; add to ~/.zshrc
 ```
 
-Restart Claude Code. The 28 lean-profile tools become available as `mcp__intervals-icu-jan__*` (or all 134 if you add `"INTERVALS_PROFILE": "full"` to the `env` block above).
+Restart Claude Code. The 30 lean-profile tools become available as `mcp__intervals-icu-jan__*` (or all 134 if you add `"INTERVALS_PROFILE": "full"` to the `env` block above).
 
 For per-tool write confirmations (recommended), add `permissions.ask` rules — the AITrainer repo at `../` ships a complete example covering all 61 write tools (sport-settings writes, wellness writes, event bulk ops, gear writes, athlete updates, etc.).
 
@@ -113,7 +139,7 @@ File location:
 
 ## Tool inventory (134 across 17 domains)
 
-This table lists the **full** profile. The `lean` profile (default) exposes the 28 tools enumerated above.
+This table lists the **full** profile. The `lean` profile (default) exposes the 30 tools enumerated above.
 
 | Domain | Read tools | Write tools |
 |---|---|---|
@@ -135,7 +161,7 @@ This table lists the **full** profile. The `lean` profile (default) exposes the 
 | **File ops** (multipart + binary) | `download_activity_file`, `download_activity_fit_file`, `download_activity_gpx_file`, `download_workout`, `download_workout_for_athlete` | `upload_activity`, `upload_activity_streams_csv`, `import_workout_file`, `download_activity_fit_files` (POST-with-body bundle download) |
 | **Aggregators** (cross-domain fat-tools) | `get_activity_full_report` (8 parallel subcalls → one consolidated markdown report) | — |
 
-Total: **134 tools** in `full`, **28** in `lean`. Run `INTERVALS_PROFILE=full uv run python -c "from intervals_mcp_server.server import mcp; import asyncio; print(len(asyncio.run(mcp.list_tools())))"` to get the live count.
+Total: **134 tools** in `full`, **30** in `lean`. Run `INTERVALS_PROFILE=full uv run python -c "from intervals_mcp_server.server import mcp; import asyncio; print(len(asyncio.run(mcp.list_tools())))"` to get the live count.
 
 ### Zwift / ERG / MRC workout export
 
