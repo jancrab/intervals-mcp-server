@@ -6,6 +6,21 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.3.0] — 2026-04-29 — Pre-normalization stub detection
+
+### Added
+
+- **Draft-state activity detection** in `format_activity_summary`. Activities that are uploaded to intervals.icu but haven't completed normalization (e.g. fresh Zwift uploads sitting in upstream-ID limbo) now render as a 7-line remediation message pointing to the activity's web URL, instead of 60 lines of "N/A" that look like a fetch failure. Detection fires when the activity ID is an int or lacks the `i…` prefix, OR when name/type/start_date_local are all missing.
+- **Structured 422 handling** in `get_activity_intervals`. intervals.icu returns 422 Unprocessable on intervals queries against pre-normalization activities; the tool now surfaces this as a structured `{"status": "draft", "message": ...}` response instead of leaking the raw API error. Other 4xx/5xx responses keep their existing wording so real failures aren't masked.
+
+### Why
+
+Reported by `cowork-telegram-mcp` author after a Zwift FTP test on 2026-04-29 returned an empty stub through the MCP while showing full data in the web UI. Cross-checked against eight prior planned-event-paired completions (Apr 1, 3, 6, 9, 12, 15, 17, 19) — all normalized cleanly. Discriminator was the upload's pre-normalization state, not event-pairing. Manual save in the web UI forces normalization. The fork now self-explains this when it sees the signature.
+
+### Migration
+
+None required. Drop-in upgrade — download `intervals-icu-jan-1.3.0.mcpb` from the release, double-click, restart Claude Desktop / Cowork. Existing config preserved.
+
 ## [1.2.0] — 2026-04-27
 
 First public release of the fork. MCPB-installable Claude Desktop extension shipped on this tag.

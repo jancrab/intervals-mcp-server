@@ -29,8 +29,99 @@ class _KeyTracker(dict):
         return super().__contains__(key)
 
 
+# ---------------------------------------------------------------------------
+# Pre-normalization stub detection (v1.3.0)
+# ---------------------------------------------------------------------------
+#
+# intervals.icu's ingest pipeline runs in stages: upload → store with upstream
+# ID → normalize → assign `i…`-prefixed internal ID → name (auto-link to
+# planned events if matchable) → expose through canonical API endpoints with
+# full metadata.
+#
+# Activities stuck after step 2 (e.g. a fresh Zwift FTP test sitting in
+# pre-normalization) are visible in intervals.icu's web UI (which renders
+# from the upload payload) but return as empty stubs through the API: the ID
+# is the raw upstream form (an int or unprefixed string), and most fields are
+# null / "Unknown" / 0. The user-facing remediation is to open the activity
+# in the web UI, name it, and save — that forces normalization.
+#
+# Without detection, `format_activity_summary` faithfully renders 60 lines of
+# "N/A" / "Unknown" / "0" which looks like a fetch failure. This block
+# detects the stub shape and surfaces a self-explaining remediation message
+# instead. Detection is intentionally over-eager; both ID and metadata
+# signals are sufficient on their own.
+
+
+def _is_draft_activity(activity: dict[str, Any]) -> bool:
+    """Detect intervals.icu pre-normalization stubs.
+
+    Returns True if EITHER:
+    - The ID is an int (not a string), OR is a non-empty string that doesn't
+      start with `"i"`. (Normalized intervals.icu activity IDs always start
+      with `"i"`.)
+    - All of `name`, `type`, and `start_date_local` are missing / null /
+      empty / the literal string "Unknown".
+
+    Either condition is sufficient. False positives on a malformed but
+    normalized response are preferable to silently rendering 60 lines of
+    "N/A" on a real stub.
+    """
+    if not isinstance(activity, dict):
+        return False
+
+    # ID-based check
+    raw_id = activity.get("id")
+    if isinstance(raw_id, int):
+        return True
+    if isinstance(raw_id, str) and raw_id and not raw_id.startswith("i"):
+        return True
+
+    # Metadata-emptiness check
+    def _is_empty(value: Any) -> bool:
+        return value is None or value == "" or value == "Unknown"
+
+    if all(
+        _is_empty(activity.get(key))
+        for key in ("name", "type", "start_date_local")
+    ):
+        return True
+
+    return False
+
+
+def _format_draft_activity(activity: dict[str, Any]) -> str:
+    """Render a remediation message for a pre-normalization stub.
+
+    7-line message pointing the user at the activity's web URL. Strips the
+    URL line if `id` is missing / unrenderable. Uses the raw ID verbatim —
+    intervals.icu's web URL accepts both upstream-form and `i`-prefixed IDs,
+    so no munging needed.
+    """
+    raw_id = activity.get("id")
+    lines = ["Activity: <draft / pre-normalization on intervals.icu>"]
+    if raw_id not in (None, ""):
+        lines.append(f"ID: {raw_id}")
+        lines.append(f"URL: https://intervals.icu/activities/{raw_id}")
+    lines.append("")
+    lines.append(
+        "⚠️ This activity is uploaded but hasn't completed normalization on intervals.icu's side."
+    )
+    lines.append("The web UI can render it, but the API exposes it as an empty stub.")
+    lines.append("")
+    lines.append("Fix: open the URL above, give the activity a name, and save.")
+    lines.append("That forces normalization. Re-pull this tool afterwards to get")
+    lines.append("full power/HR/duration data.")
+    return "\n".join(lines)
+
+
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
+    # Pre-normalization stub short-circuit (v1.3.0). See _is_draft_activity
+    # for the detection criteria. Returning early avoids rendering 60 lines
+    # of N/A on a stub payload — instead surfaces a remediation hint.
+    if _is_draft_activity(activity):
+        return _format_draft_activity(activity)
+
     start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
 
     if isinstance(start_time, str) and len(start_time) > 10:

@@ -51,7 +51,7 @@ def test_get_activities(monkeypatch):
     """
     sample = {
         "name": "Morning Ride",
-        "id": 123,
+        "id": "i123",  # `i…` prefix = post-normalization (v1.3.0 draft detection)
         "type": "Ride",
         "startTime": "2024-01-01T08:00:00Z",
         "distance": 1000,
@@ -77,7 +77,7 @@ def test_get_activity_details(monkeypatch):
     """
     sample = {
         "name": "Morning Ride",
-        "id": 123,
+        "id": "i123",  # `i…` prefix = post-normalization (v1.3.0 draft detection)
         "type": "Ride",
         "startTime": "2024-01-01T08:00:00Z",
         "distance": 1000,
@@ -92,7 +92,7 @@ def test_get_activity_details(monkeypatch):
     monkeypatch.setattr(
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
-    result = asyncio.run(get_activity_details(123))
+    result = asyncio.run(get_activity_details("i123"))
     assert "Activity: Morning Ride" in result
 
 
@@ -236,6 +236,35 @@ def test_get_activity_intervals(monkeypatch):
     result = asyncio.run(get_activity_intervals("123"))
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_get_activity_intervals_422_returns_structured_draft(monkeypatch):
+    """v1.3.0: a 422 from the intervals endpoint signals a pre-normalization
+    stub on intervals.icu's side. The tool must surface a structured draft
+    response (with the manual-save remediation hint), not leak the raw API
+    error wording. Other 4xx/5xx responses retain the existing wording so
+    real failures aren't masked behind the draft path.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        # Mirrors the shape returned by api.client._handle_http_status_error
+        return {
+            "error": True,
+            "status_code": 422,
+            "message": (
+                "422 Unprocessable Content: The server couldn't process the "
+                "request (invalid parameters or unsupported operation)."
+            ),
+        }
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("18303442074"))
+    assert '"status": "draft"' in result
+    assert "pre-normalization" in result
+    assert "name and save" in result
 
 
 def test_get_activity_streams(monkeypatch):

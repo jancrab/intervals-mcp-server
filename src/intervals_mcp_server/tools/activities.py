@@ -222,6 +222,19 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
 
     if isinstance(result, dict) and "error" in result:
+        # Pre-normalization stubs return 422 on the intervals endpoint —
+        # see formatting._is_draft_activity for the upstream context. Surface
+        # a structured remediation hint instead of leaking the raw API error,
+        # which gives the model / user a clear path forward (manual save in
+        # the web UI). Other 4xx/5xx responses keep their original behavior
+        # so we don't hide real failures behind the draft path.
+        if result.get("status_code") == 422:
+            return (
+                '{"status": "draft", '
+                '"message": "Activity is in pre-normalization state on '
+                "intervals.icu — name and save it on the web UI to expose "
+                'intervals data, then retry."}'
+            )
         error_message = result.get("message", "Unknown error")
         return f"Error fetching intervals: {error_message}"
 

@@ -45,7 +45,7 @@ The fork ships an [MCPB extension manifest](./manifest.json) (`manifest_version:
 
 **Prerequisite: `uv` on PATH.** The bundle launches the server via `uv`, so install it first (see Troubleshooting below if Claude Desktop reports it can't find `uv`).
 
-1. **Download** `intervals-icu-jan-1.2.0.mcpb` from the [v1.2.0 release](https://github.com/jancrab/intervals-mcp-server/releases/tag/v1.2.0) on GitHub.
+1. **Download** `intervals-icu-jan-1.3.0.mcpb` from the [latest release](https://github.com/jancrab/intervals-mcp-server/releases/latest) on GitHub.
 2. **Double-click** the `.mcpb` file. Claude Desktop opens its install dialog.
 3. **Fill the four user-config fields**:
    - `api_key` — your intervals.icu API key (marked sensitive in the UI).
@@ -75,6 +75,7 @@ Expected: the lean profile is active (30 tools), and `mcp__intervals-icu-jan__ge
   Restart Desktop after install so it picks up the new PATH.
 - **API key rejected (HTTP 401).** Regenerate the key at intervals.icu → Settings → Developer Settings, then update the value in Settings → Extensions → `intervals-icu-jan` and restart Desktop.
 - **Tool count is 134 when you expected 30.** `INTERVALS_PROFILE` is set to `full` in extension settings. Open Settings → Extensions → `intervals-icu-jan` → **Tool profile** → type `lean` → save → restart Desktop.
+- **Activity returns "pre-normalization on intervals.icu" message.** intervals.icu's ingest pipeline hasn't completed for that upload yet — common with fresh Zwift rides, especially when a planned event for the same day exists but the activity hasn't been linked to it. Open the activity URL printed in the message, give it a name, and save. That forces normalization, after which the tool returns full data. (Detection added in v1.3.0; older builds render 60 lines of `N/A` instead.)
 - **Install dialog says "Python >=3.12" required.** This means your `manifest.json` has `compatibility.runtimes.python` set, which makes Claude Desktop pre-flight-check the **host** Python — but `uv`-driven bundles don't use host Python (they auto-provision their own per `pyproject.toml`). The shipped v1.2.0 bundle has this field removed; if you built an earlier `.mcpb` locally, rebuild after pulling `main` or remove the `runtimes.python` line from your manifest before packing.
 
 ### B. Claude Code — `.mcp.json` in your project

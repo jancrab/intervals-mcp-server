@@ -19,10 +19,14 @@ from tests.sample_data import INTERVALS_DATA
 def test_format_activity_summary():
     """
     Test that format_activity_summary returns a string containing the activity name and ID.
+
+    Uses an `i`-prefixed string ID per intervals.icu's post-normalization
+    convention. (Pre-normalization stubs use unprefixed / int IDs and are
+    short-circuited by the draft-detection path; covered by separate tests.)
     """
     data = {
         "name": "Morning Ride",
-        "id": 1,
+        "id": "i1",
         "type": "Ride",
         "startTime": "2024-01-01T08:00:00Z",
         "distance": 1000,
@@ -30,7 +34,7 @@ def test_format_activity_summary():
     }
     result = format_activity_summary(data)
     assert "Activity: Morning Ride" in result
-    assert "ID: 1" in result
+    assert "ID: i1" in result
 
 
 def test_format_workout():
@@ -187,3 +191,94 @@ def test_format_intervals():
     result = format_intervals(INTERVALS_DATA)
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+# ---------------------------------------------------------------------------
+# v1.3.0 — Pre-normalization stub detection
+# ---------------------------------------------------------------------------
+
+from intervals_mcp_server.utils.formatting import (  # noqa: E402  (after-fixture import is intentional)
+    _format_draft_activity,
+    _is_draft_activity,
+)
+
+
+def test_is_draft_activity_detects_int_id():
+    """An int id is a clear pre-normalization signal — intervals.icu uses
+    `i…`-prefixed string IDs only after normalization."""
+    assert _is_draft_activity({"id": 18303442074}) is True
+
+
+def test_is_draft_activity_detects_unprefixed_str_id():
+    """Some upstream IDs (e.g. Garmin / Strava activity IDs) come back as
+    raw numeric strings before normalization assigns the `i…` form."""
+    assert _is_draft_activity({"id": "18303442074"}) is True
+
+
+def test_is_draft_activity_detects_empty_metadata():
+    """Even with a properly-prefixed id, an activity with all of name,
+    type, and start_date_local missing is a stub. The web UI still renders
+    it (from the upload payload) but the API exposes nothing."""
+    assert (
+        _is_draft_activity(
+            {
+                "id": "i12345",
+                "name": None,
+                "type": None,
+                "start_date_local": None,
+            }
+        )
+        is True
+    )
+
+
+def test_is_draft_activity_passes_normal_activity():
+    """A fully-populated activity must NOT be flagged. False positives
+    here would short-circuit real data through the remediation message."""
+    assert (
+        _is_draft_activity(
+            {
+                "id": "i142786468",
+                "name": "Z2 movie maker",
+                "type": "VirtualRide",
+                "start_date_local": "2026-04-25T08:52:20",
+            }
+        )
+        is False
+    )
+
+
+def test_format_draft_activity_includes_url():
+    """The remediation message must include a clickable web URL using the
+    raw activity ID — intervals.icu's web URL accepts both upstream and
+    `i…`-prefixed IDs, so no munging needed."""
+    out = _format_draft_activity({"id": 18303442074})
+    assert "https://intervals.icu/activities/18303442074" in out
+
+
+def test_format_activity_summary_short_circuits_on_draft():
+    """The short-circuit must replace the entire 60-line N/A block with
+    the remediation message. No `Power Data:` heading should appear."""
+    draft = {"id": 18303442074, "name": None, "type": None}
+    out = format_activity_summary(draft)
+    assert "Power Data:" not in out
+    assert "pre-normalization" in out
+
+
+def test_format_activity_summary_renders_normal_activity_unchanged():
+    """A fully-populated activity must render via the existing pipeline,
+    including the `Power Data:` section header. This guards against
+    accidental over-eager draft detection."""
+    activity = {
+        "name": "Tempo Ride",
+        "id": "i142786468",
+        "type": "Ride",
+        "start_date_local": "2026-04-25T08:52:20",
+        "startTime": "2026-04-25T08:52:20Z",
+        "distance": 30000,
+        "duration": 3600,
+        "icu_average_watts": 220,
+    }
+    out = format_activity_summary(activity)
+    assert "Power Data:" in out
+    assert "pre-normalization" not in out
