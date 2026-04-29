@@ -180,9 +180,15 @@ async def get_event_by_id(
     if error_msg:
         return error_msg
 
-    # Call the Intervals.icu API
+    # Call the Intervals.icu API.
+    #
+    # v1.3.1 fix: the canonical path is `/athlete/{id}/events/{eventId}`
+    # (plural `events`, per OpenAPI spec). The fork shipped with singular
+    # `/event/{eventId}` from the upstream/early branch which returned 404
+    # for IDs that `get_events` (which uses the correct plural form) listed
+    # cleanly. Aligning with `get_events` resolves it.
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:

@@ -95,6 +95,7 @@ from intervals_mcp_server.tools.activity_analytics import (  # noqa: F401
 from intervals_mcp_server.tools.activity_writes import (  # noqa: F401
     delete_activity,
     delete_intervals,
+    link_activity_to_event,
     split_interval,
     update_activity,
     update_activity_streams,
@@ -264,6 +265,7 @@ __all__ = [
     "update_interval",
     "delete_intervals",
     "split_interval",
+    "link_activity_to_event",
     # activity_athlete_level
     "get_activities_by_ids",
     "list_activities_around",

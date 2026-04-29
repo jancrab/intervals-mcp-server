@@ -282,3 +282,32 @@ def test_format_activity_summary_renders_normal_activity_unchanged():
     out = format_activity_summary(activity)
     assert "Power Data:" in out
     assert "pre-normalization" not in out
+
+
+# ---------------------------------------------------------------------------
+# v1.3.1 — Sharpened draft message (orphan vs save-and-name)
+# ---------------------------------------------------------------------------
+
+
+def test_draft_message_mentions_link_tool():
+    """Sharpened message must point at the new write tool by name so the
+    model can act when an orphan-Zwift-workout case is detected. Without
+    the tool name, the model has no fast path to the canonical fix."""
+    out = _format_draft_activity({"id": 18303442074})
+    assert "link_activity_to_event" in out
+
+
+def test_draft_message_keeps_url():
+    """The web URL line must survive the v1.3.1 rewrite — older v1.3.0
+    tests check for it, and it's still the user's manual fallback when
+    no planned event exists for the date."""
+    out = _format_draft_activity({"id": 18303442074})
+    assert "https://intervals.icu/activities/18303442074" in out
+
+
+def test_draft_message_keeps_save_path():
+    """The non-orphan stuck-upload remediation (manual rename + save) must
+    still be surfaced — orphan-link is the new primary path but plain
+    ingest stalls still happen and the save remediation handles them."""
+    out = _format_draft_activity({"id": 18303442074})
+    assert "give the activity a name, and save" in out

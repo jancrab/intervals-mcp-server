@@ -92,10 +92,11 @@ def _is_draft_activity(activity: dict[str, Any]) -> bool:
 def _format_draft_activity(activity: dict[str, Any]) -> str:
     """Render a remediation message for a pre-normalization stub.
 
-    7-line message pointing the user at the activity's web URL. Strips the
-    URL line if `id` is missing / unrenderable. Uses the raw ID verbatim —
-    intervals.icu's web URL accepts both upstream-form and `i`-prefixed IDs,
-    so no munging needed.
+    Sharpened in v1.3.1 to distinguish the orphan-Zwift-workout case (resolved
+    by `link_activity_to_event`) from generic stuck uploads (resolved by name +
+    save in the web UI). Strips the URL line if `id` is missing / unrenderable.
+    Uses the raw ID verbatim — intervals.icu's web URL accepts both upstream-form
+    and `i`-prefixed IDs, so no munging needed.
     """
     raw_id = activity.get("id")
     lines = ["Activity: <draft / pre-normalization on intervals.icu>"]
@@ -104,12 +105,19 @@ def _format_draft_activity(activity: dict[str, Any]) -> str:
         lines.append(f"URL: https://intervals.icu/activities/{raw_id}")
     lines.append("")
     lines.append(
-        "⚠️ This activity is uploaded but hasn't completed normalization on intervals.icu's side."
+        "⚠️ This activity is uploaded but hasn't completed normalization on intervals.icu."
     )
-    lines.append("The web UI can render it, but the API exposes it as an empty stub.")
     lines.append("")
-    lines.append("Fix: open the URL above, give the activity a name, and save.")
-    lines.append("That forces normalization. Re-pull this tool afterwards to get")
+    lines.append("Two paths to fix:")
+    lines.append(
+        "- If a planned event exists for this date and you ran a different Zwift workout"
+    )
+    lines.append("  than the prescribed .zwo, the activity is orphan. Resolve via:")
+    lines.append("    link_activity_to_event(activity_id, event_id)")
+    lines.append("  (Find event_id via get_events for this date.)")
+    lines.append("- Otherwise, open the URL above, give the activity a name, and save.")
+    lines.append("")
+    lines.append("Either action forces normalization. Re-pull this tool afterwards to get")
     lines.append("full power/HR/duration data.")
     return "\n".join(lines)
 

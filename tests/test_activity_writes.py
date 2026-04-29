@@ -20,6 +20,7 @@ os.environ.setdefault("ATHLETE_ID", "i1")
 from intervals_mcp_server.tools.activity_writes import (  # pylint: disable=wrong-import-position
     delete_activity,
     delete_intervals,
+    link_activity_to_event,
     split_interval,
     update_activity,
     update_activity_streams,
@@ -318,3 +319,129 @@ def test_split_interval_uses_query_param(monkeypatch):
     assert captured["params"] == {"splitAt": 900}
     assert "split" in result.lower()
     assert "first half" in result
+
+
+# ---------------------------------------------------------------------------
+# link_activity_to_event (v1.3.1) — orphan-Zwift-workout resolution
+# ---------------------------------------------------------------------------
+
+
+def test_link_activity_to_event_success(monkeypatch):
+    """Happy path: 200 with the linked activity payload. Returned dict has
+    status=linked + activity_id/event_id correctly populated. URL is the
+    activity-scoped PUT and body carries paired_event_id as an int."""
+    import json as _json
+
+    captured: dict[str, Any] = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured["url"] = kwargs.get("url")
+        captured["method"] = kwargs.get("method")
+        captured["data"] = kwargs.get("data")
+        # Server returns the canonical Activity record on success.
+        return {"id": "i999", "paired_event_id": 107189636}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="18303442074",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    assert captured["method"] == "PUT"
+    assert captured["url"].endswith("/activity/18303442074")
+    assert captured["data"] == {"paired_event_id": 107189636}
+
+    payload = _json.loads(raw)
+    assert payload["status"] == "linked"
+    # On success the canonical i… ID from the response wins.
+    assert payload["activity_id"] == "i999"
+    assert payload["event_id"] == "107189636"
+
+
+def test_link_activity_to_event_404(monkeypatch):
+    """404 (e.g. activity not found): structured error response, API's
+    verbatim message preserved — not remapped to a friendlier wording."""
+    import json as _json
+
+    api_msg = "404 Not Found: The requested endpoint or ID doesn't exist."
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "status_code": 404, "message": api_msg}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="i_does_not_exist",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    payload = _json.loads(raw)
+    assert payload["status"] == "error"
+    assert payload["http_status"] == 404
+    assert payload["message"] == api_msg
+
+
+def test_link_activity_to_event_422_preserves_api_message(monkeypatch):
+    """422 reasons vary (already paired, structure mismatch, athlete
+    mismatch, etc). The tool MUST NOT remap to a single phrase — the
+    user/model needs the actual API wording to act."""
+    import json as _json
+
+    api_msg = "422 Unprocessable: workout structure does not match planned event"
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "status_code": 422, "message": api_msg}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="18303442074",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    payload = _json.loads(raw)
+    assert payload["status"] == "error"
+    assert payload["http_status"] == 422
+    # API wording preserved verbatim — no over-translation.
+    assert payload["message"] == api_msg
+    assert "workout structure" in payload["message"]
+
+
+def test_link_activity_to_event_validates_activity_id():
+    """Empty activity_id raises ValueError before any API call. No mock
+    needed — the validation gate must fire before the network hit."""
+    import pytest
+
+    with pytest.raises(ValueError, match="activity_id"):
+        asyncio.run(
+            link_activity_to_event(
+                activity_id="",
+                event_id="107189636",
+            )
+        )
+
+
+def test_link_activity_to_event_validates_event_id():
+    """Non-numeric event_id raises ValueError before any API call.
+    intervals.icu's event IDs are always positive integers."""
+    import pytest
+
+    with pytest.raises(ValueError, match="event_id"):
+        asyncio.run(
+            link_activity_to_event(
+                activity_id="18303442074",
+                event_id="not-a-number",
+            )
+        )
+
+

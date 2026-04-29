@@ -91,6 +91,13 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "add_or_update_event",          # create OR update — single combined tool
         "delete_event",
         "mark_event_as_done",
+        # --- Activity → event linking (v1.3.1) ----------------------------
+        # Resolves the orphan-Zwift-workout case (Zwift stock workout run
+        # instead of prescribed .zwo → upload can't auto-link → activity
+        # stuck in pre-normalization). Lean by design: the draft-state
+        # remediation message points at this tool and it must be reachable
+        # without flipping to full.
+        "link_activity_to_event",
         # --- Workout library ----------------------------------------------
         "list_workouts",
         "get_workout",

@@ -195,6 +195,103 @@ async def update_activity(  # pylint: disable=too-many-arguments,too-many-locals
 
 
 # ---------------------------------------------------------------------------
+# link_activity_to_event — PUT /activity/{id} with {"paired_event_id": ...}
+#
+# Resolves the orphan-Zwift-workout case (added v1.3.1). When a user runs a
+# Zwift stock workout instead of the prescribed `.zwo`, intervals.icu can't
+# auto-link the upload to the planned event because workout structures don't
+# match — the activity stays in pre-normalization state, exposing only an
+# empty stub through the API. Manual rename + save (the v1.3.0 remediation)
+# does not unstick orphans.
+#
+# This tool POSTs the link by writing `paired_event_id` directly into the
+# Activity record. The link triggers normalization on intervals.icu's side;
+# subsequent reads return full power/HR/duration data.
+#
+# Implementation note: the same endpoint as update_activity (PUT
+# /activity/{id}), but a focused single-field body and a structured success/
+# error response shape distinct from the markdown-flavoured update_activity
+# return. The model gets a clear "do this when an orphan is detected" tool
+# rather than having to know to call update_activity with `other_fields`.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def link_activity_to_event(
+    activity_id: str,
+    event_id: str,
+    api_key: str | None = None,
+    athlete_id: str | None = None,
+) -> str:
+    """Link an activity to a planned event on intervals.icu, forcing normalization of orphan uploads.
+
+    Use this when an activity exists but is stuck in pre-normalization state — typical
+    when a Zwift stock workout was run instead of the prescribed `.zwo` file. The MCP's
+    draft-state detection (v1.3.0+) flags these. After linking, re-call
+    `get_activity_details(activity_id)` to retrieve full power/HR/duration data. Find
+    `event_id` via `get_events` for the activity's date.
+
+    Args:
+        activity_id: The Intervals.icu activity ID (e.g. "i142786468" or upstream form).
+        event_id: The planned event ID to link to. Must parse as a positive integer.
+        api_key: API key (optional; defaults to API_KEY env var).
+        athlete_id: Athlete ID (optional; resolved for parameter consistency — endpoint
+            is activity-scoped, not athlete-scoped).
+    """
+    # Validation gate — fire before any API call so caller sees a clear error.
+    if not isinstance(activity_id, str) or not activity_id.strip():
+        raise ValueError("activity_id must be a non-empty string")
+    try:
+        event_id_int = int(str(event_id).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"event_id must parse as a positive integer, got {event_id!r}"
+        ) from exc
+    if event_id_int <= 0:
+        raise ValueError(f"event_id must be a positive integer, got {event_id_int}")
+
+    # athlete_id is resolved for consistency with the rest of the writes-tool
+    # surface, even though the underlying URL is activity-scoped.
+    _athlete_id_to_use, _ = resolve_athlete_id(athlete_id, config.athlete_id)
+
+    body = {"paired_event_id": event_id_int}
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id.strip()}",
+        api_key=api_key,
+        method="PUT",
+        data=body,
+    )
+
+    # Structured error path: preserve the API's wording verbatim. Different
+    # 422 reasons exist (already paired, event-not-found, athlete-mismatch,
+    # workout-structure-rejected) and over-translation loses information.
+    if isinstance(result, dict) and result.get("error"):
+        return _json.dumps(
+            {
+                "status": "error",
+                "http_status": result.get("status_code"),
+                "message": result.get("message", "Unknown error"),
+            }
+        )
+
+    # Success path. The PUT response includes the canonical Activity record;
+    # use its `id` if present (post-link normalization may surface the
+    # `i…`-prefixed form here for the first time). Otherwise return the input.
+    canonical_id: str
+    if isinstance(result, dict) and result.get("id"):
+        canonical_id = str(result["id"])
+    else:
+        canonical_id = activity_id.strip()
+    return _json.dumps(
+        {
+            "status": "linked",
+            "activity_id": canonical_id,
+            "event_id": str(event_id_int),
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # delete_activity — DELETE /activity/{id}
 # ---------------------------------------------------------------------------
 

@@ -6,6 +6,28 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.3.1] — 2026-04-29 — `link_activity_to_event` tool + sharpened draft message + `get_event_by_id` fix
+
+### Added
+
+- **`link_activity_to_event(activity_id, event_id)` tool** (lean profile) — write-side tool that links an activity to a planned event on intervals.icu by PUTing `{"paired_event_id": <int>}` to `/activity/{id}`. Use when an activity is stuck in pre-normalization state because of a workout-structure mismatch (typically a Zwift stock workout run instead of the prescribed `.zwo`). Forces normalization on intervals.icu's side; subsequent reads return full power/HR/duration data. Validation: `activity_id` non-empty, `event_id` parses as a positive integer — raises `ValueError` before any API call. Returns a structured JSON envelope (`{"status": "linked", ...}` on success; `{"status": "error", "http_status": <int>, "message": "<API verbatim>"}` on failure). API error wording is preserved verbatim — different 422 reasons exist (already paired, structure mismatch, athlete mismatch) and over-translation loses information.
+
+### Changed
+
+- **Sharpened draft-state remediation message** in `format_activity_summary` (v1.3.0) to distinguish the orphan-Zwift-workout case (resolved by `link_activity_to_event`) from generic stuck uploads (resolved by manual rename + save in the web UI). The URL line and ID line are preserved in their v1.3.0 positions; existing tests for those still pass.
+
+### Fixed
+
+- **`get_event_by_id` 404 bug** — the tool was constructing `/athlete/{id}/event/{eventId}` (singular `event`), which returned 404 for IDs that `get_events` listed cleanly. Aligned with the canonical `/athlete/{id}/events/{eventId}` (plural, per OpenAPI spec). Confirmed today against event ID `107189636`.
+
+### Why
+
+Reported on 2026-04-29 after a Zwift FTP test (activity `18303442074`) landed orphan: user ran Zwift's stock 20-min FTP test instead of the prescribed `.zwo`, the upload couldn't auto-link to the planned event, and even after rename it stayed in pre-normalization state. v1.3.0's "rename and save" guidance does not unstick orphans because intervals.icu treats them as structurally unmatched, not just missing-name. The link tool resolves this case in one call. The sharpened draft message points the model at the tool when an orphan is detected. The `get_event_by_id` 404 was a separate bug uncovered during the same diagnosis (couldn't fetch event detail for the planned FTP test to construct the link call) and was bundled because adjacent.
+
+### Migration
+
+None required. Drop-in upgrade — download `intervals-icu-jan-1.3.1.mcpb`, double-click, restart Claude Desktop / Cowork. Existing config preserved.
+
 ## [1.3.0] — 2026-04-29 — Pre-normalization stub detection
 
 ### Added

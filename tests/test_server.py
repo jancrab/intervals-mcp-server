@@ -142,6 +142,31 @@ def test_get_event_by_id(monkeypatch):
     assert "Test Event" in result
 
 
+def test_get_event_by_id_uses_correct_url(monkeypatch):
+    """v1.3.1 fix: get_event_by_id was constructing
+    `/athlete/{id}/event/{eventId}` (singular `event`), which 404'd for
+    IDs that get_events listed cleanly. Canonical path is
+    `/athlete/{id}/events/{eventId}` (plural). This test pins the URL
+    construction to match get_events's working pattern.
+    """
+    captured: dict[str, str] = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured["url"] = kwargs.get("url", "")
+        return {"id": "107189636", "date": "2026-04-29", "name": "FTP test"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    asyncio.run(get_event_by_id("107189636", athlete_id="i1"))
+    assert "/events/" in captured["url"], (
+        f"get_event_by_id must use plural `events`; got {captured['url']!r}"
+    )
+    assert "/event/" not in captured["url"].replace("/events/", "/__plural__/"), (
+        f"get_event_by_id must NOT use singular `event/`; got {captured['url']!r}"
+    )
+    assert captured["url"].endswith("/events/107189636")
+
+
 def test_get_wellness_data(monkeypatch):
     """
     Test get_wellness_data returns a formatted string containing wellness data for a given athlete.

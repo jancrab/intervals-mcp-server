@@ -165,6 +165,7 @@ from intervals_mcp_server.tools.activity_analytics import (  # pylint: disable=w
 from intervals_mcp_server.tools.activity_writes import (  # pylint: disable=wrong-import-position  # noqa: E402
     delete_activity,
     delete_intervals,
+    link_activity_to_event,
     split_interval,
     update_activity,
     update_activity_streams,
@@ -332,6 +333,7 @@ __all__ = [
     "update_interval",
     "delete_intervals",
     "split_interval",
+    "link_activity_to_event",
     # activity_athlete_level
     "get_activities_by_ids",
     "list_activities_around",
