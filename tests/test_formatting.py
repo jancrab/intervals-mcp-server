@@ -158,6 +158,23 @@ def test_format_event_summary():
     assert "Type: Race" in summary
 
 
+def test_format_event_details_renders_start_date_local():
+    """v1.3.2: get_event_by_id returns events with `start_date_local` (not
+    `date`); the previous formatter rendered `Date: Unknown` for every such
+    event. The formatter must now fall back through start_date_local → date
+    → "Unknown" — same chain `format_event_summary` already uses."""
+    event = {
+        "id": "107189636",
+        "start_date_local": "2026-04-29T00:00:00",
+        # Note: no top-level `date` field — this is the by-id endpoint shape.
+        "name": "FTP test",
+        "description": "20-min test",
+    }
+    details = format_event_details(event)
+    assert "Date: 2026-04-29T00:00:00" in details
+    assert "Date: Unknown" not in details
+
+
 def test_format_event_details():
     """
     Test that format_event_details returns a string containing event and workout details.

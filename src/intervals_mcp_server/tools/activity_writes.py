@@ -231,6 +231,11 @@ async def link_activity_to_event(
     `get_activity_details(activity_id)` to retrieve full power/HR/duration data. Find
     `event_id` via `get_events` for the activity's date.
 
+    If the activity is too deep in pre-normalization (raw integer ID, no `i…` prefix,
+    no metadata), the link endpoint may return `draft_unrecoverable` (v1.3.2) — that
+    case requires manual save via the web UI. Use this tool when the activity has at
+    least an `i…`-prefixed ID but didn't auto-link to a same-day planned event.
+
     Args:
         activity_id: The Intervals.icu activity ID (e.g. "i142786468" or upstream form).
         event_id: The planned event ID to link to. Must parse as a positive integer.
@@ -262,14 +267,45 @@ async def link_activity_to_event(
         data=body,
     )
 
-    # Structured error path: preserve the API's wording verbatim. Different
-    # 422 reasons exist (already paired, event-not-found, athlete-mismatch,
-    # workout-structure-rejected) and over-translation loses information.
+    # Structured error path. Two layers (v1.3.2):
+    #
+    # 1. HTTP 422 from the link endpoint typically means the activity is in
+    #    a pre-normalization state too deep for intervals.icu's link path to
+    #    resolve — the endpoint requires the activity to already be in the
+    #    canonical `i…`-prefixed ID space. Activities still holding their
+    #    raw upstream ID can't be linked via the API; manual rename via the
+    #    web UI is the only known remediation. Surface as
+    #    `{"status": "draft_unrecoverable", ...}`, mirroring v1.3.0's draft-
+    #    detection pattern in `get_activity_intervals` but with a status
+    #    distinct from `draft` because this is a stronger statement: the
+    #    activity is past the point where the link endpoint can help.
+    # 2. Other 4xx/5xx responses retain the v1.3.1 verbatim-API-message
+    #    envelope so genuine failures (404, 401, 500, etc.) aren't masked
+    #    behind the draft-unrecoverable wording.
     if isinstance(result, dict) and result.get("error"):
+        status_code = result.get("status_code")
+        if status_code == 422:
+            return _json.dumps(
+                {
+                    "status": "draft_unrecoverable",
+                    "message": (
+                        f"Activity {activity_id.strip()} is in a "
+                        "pre-normalization state that intervals.icu's link "
+                        "endpoint cannot resolve (typical for activities "
+                        "uploaded via Zwift's built-in tests, which appear "
+                        "to bypass normalization via Strava-sync). Manual "
+                        "rename via the web UI is the only known "
+                        f"remediation: open https://intervals.icu/activities/{activity_id.strip()}, "
+                        "give the activity a name, and save. Then re-call "
+                        f"get_activity_details({activity_id.strip()}) to "
+                        "verify normalization completed."
+                    ),
+                }
+            )
         return _json.dumps(
             {
                 "status": "error",
-                "http_status": result.get("status_code"),
+                "http_status": status_code,
                 "message": result.get("message", "Unknown error"),
             }
         )

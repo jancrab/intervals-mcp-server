@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "intervals-icu-jan",
   "display_name": "intervals.icu (jan fork)",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "intervals.icu MCP server — 134 tools across 17 domains. Lean profile (default) exposes 28 high-value tools (~11k tokens) including the get_activity_full_report aggregator; set INTERVALS_PROFILE=full for the full surface (~44k tokens). Forked from mvilanova/intervals-mcp-server.",
   "long_description": "Model Context Protocol server exposing the intervals.icu REST API for personal use. Covers activities (CRUD, analytics, search), events (calendar CRUD + bulk ops), wellness (read + locked-aware writes), workout templates, sport settings, gear + reminders, athlete profile + training plan, weather, routes, file operations (FIT/GPX/ZWO/MRC/ERG/TCX uploads + downloads), and a cross-domain aggregator (`get_activity_full_report`) that fetches 8 endpoints in parallel and returns one consolidated markdown report. Two profiles: `lean` (default — 28 tools, ~11k tokens of tool schema, sized for Claude Desktop) and `full` (134 tools, ~44k tokens, full SDK coverage). Each write tool is gated by `permissions.ask` in Claude Code; wellness writes default `locked: true` to survive Oura/Garmin sync.\n\n**Prerequisite**: this extension runs the Python server via `uv` (Astral's fast Python package manager). Install `uv` once, then this DXT bundle works without any further toolchain setup. macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Windows: `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"`. Python 3.12+ is required; `uv` will auto-resolve and provision it on first run.",
   "author": {

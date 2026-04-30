@@ -496,10 +496,18 @@ Description: {event_desc}"""
 def format_event_details(event: dict[str, Any]) -> str:
     """Format detailed event information into a readable string."""
 
+    # v1.3.2: align with format_event_summary's fallback chain. The
+    # /api/v1/athlete/{id}/events/{eventId} endpoint returns
+    # `start_date_local` for the event date; only the list endpoint
+    # /events shape exposes a top-level `date` field. Without this
+    # fallback, get_event_by_id rendered "Date: Unknown" for every
+    # event despite valid date data being present.
+    event_date = event.get("start_date_local", event.get("date", "Unknown"))
+
     event_details = f"""Event Details:
 
 ID: {event.get("id", "N/A")}
-Date: {event.get("date", "Unknown")}
+Date: {event_date}
 Name: {event.get("name", "Unnamed")}
 Description: {event.get("description", "No description")}"""
 

@@ -6,6 +6,29 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.3.2] — 2026-04-29 — Sharpened 422 handling on `link_activity_to_event`
+
+### Changed
+
+- **`link_activity_to_event`** now translates HTTP 422 responses to a structured `{"status": "draft_unrecoverable", "message": ...}` shape, mirroring v1.3.0's pattern for `get_activity_intervals` (which uses `"status": "draft"`). The new status is distinct because it's a stronger statement: the activity is past the point where the link endpoint can help. The message includes the activity's web URL and the manual-rename remediation. Other 4xx/5xx responses retain v1.3.1's verbatim-API-message envelope so genuine failures (404, 401, 500, etc.) aren't masked behind the draft-unrecoverable wording.
+- **Tool description** for `link_activity_to_event` now explicitly documents the v1.3.2 limit: the link endpoint cannot recover activities in deep pre-normalization (raw integer ID, no `i…` prefix). Such activities require manual save via intervals.icu's web UI.
+
+### Added
+
+- **README troubleshooting entry** documenting the orphan-pre-normalization case, the typical Zwift-built-in-test trigger (Zwift→Strava→intervals.icu sync path appears to bypass normalization), and the manual-save remediation.
+
+### Fixed
+
+- **`get_event_by_id`** rendering: `Date: Unknown` was shown for events that have a `start_date_local` field but no top-level `date` field. The `format_event_details` formatter now uses the same fallback chain as `format_event_summary` (`start_date_local` → `date` → "Unknown"). Aligns the by-id path with the list path.
+
+### Why
+
+Reported on 2026-04-29 after a v1.3.1 smoke test against today's orphan FTP test activity (`18303442074`). The new `link_activity_to_event` tool returned 422; intervals.icu's link endpoint requires the activity to already be normalized (canonical `i…` ID), which is exactly the state we wanted to force. No alternate API path has been verified yet (separate investigation parked); v1.3.2 documents the limit honestly and points users at the manual UI remediation. The `get_event_by_id` Date fix was bundled because it's a one-line align-with-existing-pattern change uncovered while diagnosing.
+
+### Migration
+
+None required. Drop-in upgrade.
+
 ## [1.3.1] — 2026-04-29 — `link_activity_to_event` tool + sharpened draft message + `get_event_by_id` fix
 
 ### Added

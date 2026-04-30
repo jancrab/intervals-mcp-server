@@ -388,16 +388,23 @@ def test_link_activity_to_event_404(monkeypatch):
     assert payload["message"] == api_msg
 
 
-def test_link_activity_to_event_422_preserves_api_message(monkeypatch):
-    """422 reasons vary (already paired, structure mismatch, athlete
-    mismatch, etc). The tool MUST NOT remap to a single phrase — the
-    user/model needs the actual API wording to act."""
+def test_link_activity_to_event_422_returns_draft_unrecoverable(monkeypatch):
+    """v1.3.2: 422 from the link endpoint signals the activity is too deep
+    in pre-normalization for the link path to resolve (typical Zwift
+    built-in test case — uploads via Zwift→Strava→intervals.icu bypass
+    normalization). The tool surfaces this as a structured
+    `draft_unrecoverable` envelope mirroring v1.3.0's pattern in
+    `get_activity_intervals` (which uses `draft`). The message must include
+    the activity URL and the manual-rename remediation so the user/model
+    has a clear next step."""
     import json as _json
 
-    api_msg = "422 Unprocessable: workout structure does not match planned event"
-
     async def fake_request(*_args, **_kwargs):
-        return {"error": True, "status_code": 422, "message": api_msg}
+        return {
+            "error": True,
+            "status_code": 422,
+            "message": "422 Unprocessable: workout structure does not match planned event",
+        }
 
     monkeypatch.setattr(
         "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
@@ -410,11 +417,68 @@ def test_link_activity_to_event_422_preserves_api_message(monkeypatch):
         )
     )
     payload = _json.loads(raw)
+    assert payload["status"] == "draft_unrecoverable"
+    # URL + remediation must be present for the user/model to act.
+    assert "https://intervals.icu/activities/18303442074" in payload["message"]
+    assert "give the activity a name, and save" in payload["message"]
+    # The activity's web URL is rendered with the raw upstream ID verbatim
+    # (intervals.icu's web URL accepts both forms).
+    assert "18303442074" in payload["message"]
+    # No `http_status` key on draft_unrecoverable — that's the v1.3.1
+    # generic-error shape, not what we use here.
+    assert "http_status" not in payload
+
+
+def test_link_activity_to_event_other_4xx_unchanged(monkeypatch):
+    """v1.3.2: non-422 4xx errors keep the v1.3.1 verbatim-API-message
+    envelope. Don't widen the 422 translation to other status codes —
+    real failures (404 not found, 401 auth) should NOT be masked behind
+    draft-unrecoverable wording."""
+    import json as _json
+
+    api_msg = "404 Not Found: The requested endpoint or ID doesn't exist."
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "status_code": 404, "message": api_msg}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="i_does_not_exist",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    payload = _json.loads(raw)
     assert payload["status"] == "error"
-    assert payload["http_status"] == 422
-    # API wording preserved verbatim — no over-translation.
+    assert payload["http_status"] == 404
     assert payload["message"] == api_msg
-    assert "workout structure" in payload["message"]
+
+
+def test_link_activity_to_event_success_unchanged(monkeypatch):
+    """v1.3.2 must not touch the 200 success path. The structured
+    {"status": "linked", "activity_id", "event_id"} envelope is unchanged."""
+    import json as _json
+
+    async def fake_request(*_args, **_kwargs):
+        return {"id": "i142786468", "paired_event_id": 107189636}
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="18303442074",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    payload = _json.loads(raw)
+    assert payload["status"] == "linked"
+    assert payload["activity_id"] == "i142786468"  # canonical i… form from response
+    assert payload["event_id"] == "107189636"
 
 
 def test_link_activity_to_event_validates_activity_id():
