@@ -388,15 +388,43 @@ def test_link_activity_to_event_404(monkeypatch):
     assert payload["message"] == api_msg
 
 
-def test_link_activity_to_event_422_returns_draft_unrecoverable(monkeypatch):
-    """v1.3.2: 422 from the link endpoint signals the activity is too deep
-    in pre-normalization for the link path to resolve (typical Zwift
-    built-in test case — uploads via Zwift→Strava→intervals.icu bypass
-    normalization). The tool surfaces this as a structured
-    `draft_unrecoverable` envelope mirroring v1.3.0's pattern in
-    `get_activity_intervals` (which uses `draft`). The message must include
-    the activity URL and the manual-rename remediation so the user/model
-    has a clear next step."""
+def test_link_activity_to_event_422_strava_returns_restricted(monkeypatch):
+    """v1.4.1: the typical Zwift orphan is Strava-sourced, and intervals.icu
+    won't serve/mutate Strava data via its API — the link 422s for a permanent
+    reason renaming can't fix. The tool returns a `strava_restricted` envelope
+    pointing at the Strava MCP. The old `draft_unrecoverable` / pre-normalization
+    / name-and-save wording must be gone."""
+    import json as _json
+
+    async def fake_request(*_args, **_kwargs):
+        return {
+            "error": True,
+            "status_code": 422,
+            "message": "422 Unprocessable Content: ... — Cannot read Strava activities via the API",
+        }
+
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activity_writes.make_intervals_request", fake_request
+    )
+    raw = asyncio.run(
+        link_activity_to_event(
+            activity_id="18303442074",
+            event_id="107189636",
+            athlete_id="i1",
+        )
+    )
+    payload = _json.loads(raw)
+    assert payload["status"] == "strava_restricted"
+    assert "[strava-restricted]" in payload["message"]
+    assert "strava:jan:get_activity_streams" in payload["message"]
+    assert "pre-normalization" not in payload["message"]
+    assert "give the activity a name, and save" not in payload["message"]
+
+
+def test_link_activity_to_event_non_strava_422_returns_link_failed(monkeypatch):
+    """v1.4.1: a non-Strava 422 (e.g. structural mismatch) returns a clear
+    `link_failed` envelope with the activity URL — without claiming a transient
+    state or a guaranteed fix."""
     import json as _json
 
     async def fake_request(*_args, **_kwargs):
@@ -417,16 +445,11 @@ def test_link_activity_to_event_422_returns_draft_unrecoverable(monkeypatch):
         )
     )
     payload = _json.loads(raw)
-    assert payload["status"] == "draft_unrecoverable"
-    # URL + remediation must be present for the user/model to act.
+    assert payload["status"] == "link_failed"
     assert "https://intervals.icu/activities/18303442074" in payload["message"]
-    assert "give the activity a name, and save" in payload["message"]
-    # The activity's web URL is rendered with the raw upstream ID verbatim
-    # (intervals.icu's web URL accepts both forms).
-    assert "18303442074" in payload["message"]
-    # No `http_status` key on draft_unrecoverable — that's the v1.3.1
-    # generic-error shape, not what we use here.
-    assert "http_status" not in payload
+    # Obsolete wording gone.
+    assert "pre-normalization" not in payload["message"]
+    assert "give the activity a name, and save" not in payload["message"]
 
 
 def test_link_activity_to_event_other_4xx_unchanged(monkeypatch):

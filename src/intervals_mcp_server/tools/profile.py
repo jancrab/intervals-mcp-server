@@ -107,11 +107,11 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "delete_event",
         "mark_event_as_done",
         # --- Activity → event linking (v1.3.1) ----------------------------
-        # Resolves the orphan-Zwift-workout case (Zwift stock workout run
-        # instead of prescribed .zwo → upload can't auto-link → activity
-        # stuck in pre-normalization). Lean by design: the draft-state
-        # remediation message points at this tool and it must be reachable
-        # without flipping to full.
+        # Resolves the orphan-workout case (Zwift stock workout run instead of
+        # the prescribed .zwo → upload can't auto-link to the planned event).
+        # Lean by design so it's reachable without flipping to full. Note: many
+        # such rides are Strava-sourced and the tool returns a strava_restricted
+        # envelope pointing at the Strava MCP.
         "link_activity_to_event",
         # --- Workout library ----------------------------------------------
         "list_workouts",

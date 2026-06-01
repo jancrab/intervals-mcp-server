@@ -38,27 +38,30 @@ class _KeyTracker(dict):
 # planned events if matchable) → expose through canonical API endpoints with
 # full metadata.
 #
-# Activities stuck after step 2 (e.g. a fresh Zwift FTP test sitting in
-# pre-normalization) are visible in intervals.icu's web UI (which renders
-# from the upload payload) but return as empty stubs through the API: the ID
-# is the raw upstream form (an int or unprefixed string), and most fields are
-# null / "Unknown" / 0. The user-facing remediation is to open the activity
-# in the web UI, name it, and save — that forces normalization.
+# The dominant "no data" cause on real accounts is the permanent Strava-source
+# restriction (source == "STRAVA"), handled by `_is_strava_restricted` /
+# `_format_strava_restricted` and checked FIRST in `format_activity_summary`.
 #
-# Without detection, `format_activity_summary` faithfully renders 60 lines of
-# "N/A" / "Unknown" / "0" which looks like a fetch failure. This block
-# detects the stub shape and surfaces a self-explaining remediation message
-# instead. Detection is intentionally over-eager; both ID and metadata
-# signals are sufficient on their own.
+# Separately, a NON-Strava activity can occasionally come back as a near-empty
+# stub: the ID is the raw upstream form (an int or unprefixed string) and most
+# fields are null / "Unknown" / 0. Without detection, `format_activity_summary`
+# faithfully renders 60 lines of "N/A" / "Unknown" / "0" which looks like a
+# fetch failure. The secondary `_is_draft_activity` predicate detects that stub
+# shape and surfaces a short honest message instead. Detection is intentionally
+# over-eager; both ID and metadata signals are sufficient on their own.
 
 
 def _is_draft_activity(activity: dict[str, Any]) -> bool:
-    """Detect intervals.icu pre-normalization stubs.
+    """Detect a non-Strava empty/minimal activity stub (SECONDARY fallback).
 
-    Returns True if EITHER:
-    - The ID is an int (not a string), OR is a non-empty string that doesn't
-      start with `"i"`. (Normalized intervals.icu activity IDs always start
-      with `"i"`.)
+    The primary withheld-data signal on real accounts is the permanent
+    Strava-source restriction — keyed on ``source == "STRAVA"`` by
+    `_is_strava_restricted`, which `format_activity_summary` checks first.
+    This predicate is only the weak secondary fallback for a genuinely empty
+    NON-Strava stub. Returns True if EITHER:
+    - The ID is an int, OR a non-empty string that doesn't start with ``"i"``
+      (a secondary signal only; normalized intervals.icu IDs start with
+      ``"i"``).
     - All of `name`, `type`, and `start_date_local` are missing / null /
       empty / the literal string "Unknown".
 
@@ -177,15 +180,45 @@ def _format_strava_restricted(activity: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_draft_advisory_header(activity: dict[str, Any]) -> str:
-    """Single-line advisory prepended to a substantive draft activity's
-    full render. Tells the caller the activity is in pre-normalization
-    state without withholding the data the API did return.
+def format_strava_restricted_error(
+    result: dict[str, Any], activity_id: str | None = None
+) -> str | None:
+    """If an API error ``result`` is caused by the Strava-source restriction,
+    return a clean one-line ``[strava-restricted]`` advisory; else ``None``.
 
-    Surfaces `source` (so the caller can see the Zwift / Strava lineage),
-    whether interval analysis has run (presence of `icu_intervals`), and
-    `stream_types` so the caller knows which streams are fetchable
-    pre-rename.
+    Per-activity derived endpoints (streams, intervals, power-curve,
+    power-vs-hr, hr-load, segments, ...) return HTTP 422 with body
+    ``"Cannot read Strava activities via the API"`` for Strava-sourced
+    activities. Callers route their error branch through this so the user
+    sees the real cause + recovery path (the Strava MCP) instead of a raw
+    422. Returns ``None`` for any non-Strava error so genuine failures (404,
+    401, 500, structural 422s) keep their own handling.
+    """
+    if not isinstance(result, dict) or "error" not in result:
+        return None
+    message = str(result.get("message", ""))
+    if "strava" not in message.lower():
+        return None
+    id_part = f" id {activity_id}" if activity_id else ""
+    return (
+        f"[strava-restricted]{id_part}: intervals.icu does not serve "
+        "Strava-sourced activity data via its API (Strava licensing) — the "
+        'server returned 422 "Cannot read Strava activities via the API". '
+        "Recover the data via the Strava MCP "
+        "(strava:jan:get_activity_streams, same id), or re-route the ride "
+        "into intervals.icu via Garmin / a direct .fit upload instead of "
+        "Strava sync."
+    )
+
+
+def _format_draft_advisory_header(activity: dict[str, Any]) -> str:
+    """Single-line advisory prepended to a partial (non-Strava) activity's
+    full render. Tells the caller intervals.icu returned an incomplete record
+    without withholding the data the API did return.
+
+    Surfaces `source` (so the caller can see the lineage), whether interval
+    analysis has run (presence of `icu_intervals`), and `stream_types` so the
+    caller knows which streams are fetchable.
     """
     raw_id = activity.get("id")
     source = activity.get("source") or "unknown"
@@ -196,12 +229,12 @@ def _format_draft_advisory_header(activity: dict[str, Any]) -> str:
         ", ".join(streams) if isinstance(streams, list) and streams else "none listed"
     )
     url = (
-        f" — open https://intervals.icu/activities/{raw_id} and save to force analysis."
+        f" — see https://intervals.icu/activities/{raw_id}."
         if raw_id not in (None, "")
         else ""
     )
     return (
-        "advisory: activity is pre-normalization on intervals.icu "
+        "advisory: intervals.icu returned a partial record for this activity "
         f"(source={source}, analyzed={analyzed}, streams={streams_str}). "
         "Data below is what the API returned"
         + url
@@ -209,35 +242,35 @@ def _format_draft_advisory_header(activity: dict[str, Any]) -> str:
 
 
 def _format_draft_activity(activity: dict[str, Any]) -> str:
-    """Render a remediation message for a pre-normalization stub.
+    """Render a short, honest message for a NON-Strava activity that the API
+    returned as a near-empty stub (no name/type/metrics).
 
-    Sharpened in v1.3.1 to distinguish the orphan-Zwift-workout case (resolved
-    by `link_activity_to_event`) from generic stuck uploads (resolved by name +
-    save in the web UI). Strips the URL line if `id` is missing / unrenderable.
-    Uses the raw ID verbatim — intervals.icu's web URL accepts both upstream-form
-    and `i`-prefixed IDs, so no munging needed.
+    Secondary fallback only: the primary withheld-data cause on real accounts
+    is the permanent Strava-source restriction, handled ahead of this by
+    `_is_strava_restricted` / `_format_strava_restricted`. A non-Strava empty
+    stub is rare; surface what little the API gave plus a neutral pointer,
+    without claiming a transient state or a guaranteed fix. Uses the raw ID
+    verbatim — intervals.icu's web URL accepts both upstream and `i`-prefixed
+    IDs.
     """
     raw_id = activity.get("id")
-    lines = ["Activity: <draft / pre-normalization on intervals.icu>"]
+    lines = [f"[incomplete-activity] id {raw_id}"]
     if raw_id not in (None, ""):
-        lines.append(f"ID: {raw_id}")
         lines.append(f"URL: https://intervals.icu/activities/{raw_id}")
     lines.append("")
     lines.append(
-        "⚠️ This activity is uploaded but hasn't completed normalization on intervals.icu."
+        "intervals.icu returned a minimal record for this non-Strava activity "
+        "(no name/type/metrics)."
     )
-    lines.append("")
-    lines.append("Two paths to fix:")
     lines.append(
-        "- If a planned event exists for this date and you ran a different Zwift workout"
+        "- If you ran a different workout than a planned event for this date, "
+        "link it via link_activity_to_event(activity_id, event_id) "
+        "(find event_id via get_events for this date)."
     )
-    lines.append("  than the prescribed .zwo, the activity is orphan. Resolve via:")
-    lines.append("    link_activity_to_event(activity_id, event_id)")
-    lines.append("  (Find event_id via get_events for this date.)")
-    lines.append("- Otherwise, open the URL above, give the activity a name, and save.")
-    lines.append("")
-    lines.append("Either action forces normalization. Re-pull this tool afterwards to get")
-    lines.append("full power/HR/duration data.")
+    lines.append(
+        "- Otherwise it may still be processing — re-pull shortly, or check the "
+        "activity on intervals.icu."
+    )
     return "\n".join(lines)
 
 
@@ -247,13 +280,13 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     State handling (v1.4.0, refined from v1.3.x):
     - Strava-restricted (source=STRAVA / `_note`) → compact honest message
       via `_format_strava_restricted`. Checked FIRST because it's the most
-      specific and most common "no data" cause on real accounts, and unlike
-      pre-normalization it is permanent — the remediation is a data-path
-      change, not rename/reprocess.
-    - Non-draft → render the full body unchanged.
-    - Draft + substantive data present → prepend a single-line advisory and
-      render the full body. The API returned data; don't withhold it.
-    - Draft + empty stub → remediation message via `_format_draft_activity`.
+      specific and most common "no data" cause on real accounts, and it is
+      permanent — the remediation is a data-path change (route the ride into
+      intervals.icu off Strava), recoverable meanwhile via the Strava MCP.
+    - Normal activity → render the full body unchanged.
+    - Non-Strava partial stub + substantive data → prepend a single-line
+      advisory and render the full body. The API returned data; don't withhold.
+    - Non-Strava empty stub → short message via `_format_draft_activity`.
 
     See `_is_strava_restricted` and `_has_substantive_activity_data`.
     """

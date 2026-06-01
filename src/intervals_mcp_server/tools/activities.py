@@ -9,7 +9,12 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_activity_message, format_activity_summary, format_intervals
+from intervals_mcp_server.utils.formatting import (
+    format_activity_message,
+    format_activity_summary,
+    format_intervals,
+    format_strava_restricted_error,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -222,19 +227,14 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
 
     if isinstance(result, dict) and "error" in result:
-        # Pre-normalization stubs return 422 on the intervals endpoint —
-        # see formatting._is_draft_activity for the upstream context. Surface
-        # a structured remediation hint instead of leaking the raw API error,
-        # which gives the model / user a clear path forward (manual save in
-        # the web UI). Other 4xx/5xx responses keep their original behavior
-        # so we don't hide real failures behind the draft path.
-        if result.get("status_code") == 422:
-            return (
-                '{"status": "draft", '
-                '"message": "Activity is in pre-normalization state on '
-                "intervals.icu — name and save it on the web UI to expose "
-                'intervals data, then retry."}'
-            )
+        # Strava-sourced activities 422 on this endpoint — intervals.icu is
+        # contractually barred from serving Strava data via its API. Surface
+        # the real cause + the Strava-MCP recovery path, never a raw 422.
+        # Genuine non-Strava failures (404, 401, structural 422s) fall through
+        # to the verbatim API message so we don't mask them.
+        sr = format_strava_restricted_error(result, activity_id)
+        if sr:
+            return sr
         error_message = result.get("message", "Unknown error")
         return f"Error fetching intervals: {error_message}"
 
@@ -286,6 +286,9 @@ async def get_activity_streams(
     )
 
     if isinstance(result, dict) and "error" in result:
+        sr = format_strava_restricted_error(result, activity_id)
+        if sr:
+            return sr
         error_message = result.get("message", "Unknown error")
         return f"Error fetching activity streams: {error_message}"
 

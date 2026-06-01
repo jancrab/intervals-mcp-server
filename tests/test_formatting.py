@@ -279,7 +279,9 @@ def test_format_activity_summary_short_circuits_on_draft():
     draft = {"id": 18303442074, "name": None, "type": None}
     out = format_activity_summary(draft)
     assert "Power Data:" not in out
-    assert "pre-normalization" in out
+    assert "[incomplete-activity]" in out
+    # Obsolete transient-state wording must be gone (v1.4.1).
+    assert "pre-normalization" not in out
 
 
 def test_format_activity_summary_renders_normal_activity_unchanged():
@@ -322,12 +324,17 @@ def test_draft_message_keeps_url():
     assert "https://intervals.icu/activities/18303442074" in out
 
 
-def test_draft_message_keeps_save_path():
-    """The non-orphan stuck-upload remediation (manual rename + save) must
-    still be surfaced — orphan-link is the new primary path but plain
-    ingest stalls still happen and the save remediation handles them."""
+def test_incomplete_message_drops_obsolete_wording():
+    """v1.4.1: the non-Strava empty-stub message no longer claims a transient
+    pre-normalization state or a guaranteed "rename to fix" — it surfaces the
+    [incomplete-activity] label, the URL, and the link tool as a neutral
+    pointer, without the obsolete remediation wording."""
     out = _format_draft_activity({"id": 18303442074})
-    assert "give the activity a name, and save" in out
+    assert "[incomplete-activity]" in out
+    assert "link_activity_to_event" in out
+    assert "give the activity a name, and save" not in out
+    assert "pre-normalization" not in out
+    assert "forces normalization" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +474,8 @@ def test_format_activity_summary_draft_empty_keeps_remediation():
     stub = {"id": 18303442074, "name": None, "type": None}
     out = format_activity_summary(stub)
     assert "Power Data:" not in out
-    assert "pre-normalization" in out
+    assert "[incomplete-activity]" in out
+    assert "pre-normalization" not in out
     # The remediation path uses _format_draft_activity, not the advisory
     # header — the literal "advisory:" prefix must not appear here.
     assert "advisory:" not in out

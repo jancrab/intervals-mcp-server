@@ -263,16 +263,40 @@ def test_get_activity_intervals(monkeypatch):
     assert "Rep 1" in result
 
 
-def test_get_activity_intervals_422_returns_structured_draft(monkeypatch):
-    """v1.3.0: a 422 from the intervals endpoint signals a pre-normalization
-    stub on intervals.icu's side. The tool must surface a structured draft
-    response (with the manual-save remediation hint), not leak the raw API
-    error wording. Other 4xx/5xx responses retain the existing wording so
-    real failures aren't masked behind the draft path.
-    """
+def test_get_activity_intervals_422_strava_returns_restricted(monkeypatch):
+    """v1.4.1: a Strava-sourced activity 422s on the intervals endpoint with
+    body "Cannot read Strava activities via the API". The tool must surface a
+    clean [strava-restricted] advisory pointing at the Strava MCP — never the
+    old draft / pre-normalization / name-and-save wording, never a raw 422."""
 
     async def fake_request(*_args, **_kwargs):
-        # Mirrors the shape returned by api.client._handle_http_status_error
+        return {
+            "error": True,
+            "status_code": 422,
+            "message": (
+                "422 Unprocessable Content: ... — Cannot read Strava activities "
+                "via the API"
+            ),
+        }
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("18303442074"))
+    assert "[strava-restricted]" in result
+    assert "strava:jan:get_activity_streams" in result
+    # The obsolete draft wording must be gone.
+    assert '"status": "draft"' not in result
+    assert "pre-normalization" not in result
+    assert "name and save" not in result
+
+
+def test_get_activity_intervals_non_strava_422_not_masked(monkeypatch):
+    """v1.4.1: a genuine non-Strava 422 (e.g. a real structural error) must NOT
+    be masked behind a draft/strava message — surface the verbatim API error."""
+
+    async def fake_request(*_args, **_kwargs):
         return {
             "error": True,
             "status_code": 422,
@@ -287,9 +311,9 @@ def test_get_activity_intervals_422_returns_structured_draft(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activity_intervals("18303442074"))
-    assert '"status": "draft"' in result
-    assert "pre-normalization" in result
-    assert "name and save" in result
+    assert "Error fetching intervals:" in result
+    assert "[strava-restricted]" not in result
+    assert "pre-normalization" not in result
 
 
 def test_get_activity_streams(monkeypatch):

@@ -6,6 +6,25 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.4.1] — 2026-05-31 — Strava-restricted on derived endpoints + obsolete-wording purge
+
+v1.4.0 fixed the summary/details path (`get_activities`, `get_activity_details` already render `[strava-restricted]`), but the per-activity **derived** endpoints still leaked the old draft wording on a 422. Live re-probe (2026-05-31) confirmed: `get_activity_intervals` on a Strava activity returned `{"status":"draft", ... "name and save it on the web UI ..."}`, and streams/curves surfaced a raw `Error fetching ...: 422`. This release closes that gap.
+
+### Fixed
+
+- **Derived endpoints now emit a clean `[strava-restricted]` advisory on the Strava 422**, never the obsolete draft text and never a raw 422. A shared helper `format_strava_restricted_error()` is routed through:
+  - `get_activity_intervals`, `get_activity_streams` (`tools/activities.py`)
+  - every per-activity analytics tool via `tools/activity_analytics.py::_error_message` (power-curve, hr-curve, power-vs-hr, hr-load, interval-stats, best-efforts, segments, map, histograms, …)
+  - `link_activity_to_event` (`tools/activity_writes.py`) — `strava_restricted` envelope for the Strava case, `link_failed` for a non-Strava 422.
+  - Genuine non-Strava 4xx/5xx errors are **not** masked — they keep their verbatim API message.
+- **Obsolete "draft / pre-normalization / rename to fix / name and save / forces normalization" wording removed** from strings, tool descriptions, and comments. The non-Strava empty-stub fallback now renders a neutral `[incomplete-activity]` message without claiming a transient state or a guaranteed fix. The only remaining "pre-normalization" mentions explicitly *negate* the old theory in the Strava advisory.
+
+### Notes
+
+- Detection is `source`-based (`_is_strava_restricted`, checked first) for the read path and 422-body-based (`"Cannot read Strava activities via the API"`) for derived endpoints — never the bare-numeric ID. `_is_draft_activity` is retained only as a clearly-documented secondary non-Strava fallback.
+- No tool-count change: lean stays at 40; `normalize_activity` still does not exist.
+- 216 tests passing.
+
 ## [1.4.0] — 2026-05-31 — Strava-source restriction (real root cause) + lean expansion
 
 ### Root cause — corrected

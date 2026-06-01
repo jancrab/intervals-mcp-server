@@ -45,6 +45,7 @@ from intervals_mcp_server.utils.formatters_activity_analytics import (
     format_time_at_hr,
     format_weather_summary,
 )
+from intervals_mcp_server.utils.formatting import format_strava_restricted_error
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
@@ -60,7 +61,15 @@ def _is_error(result: Any) -> bool:
 
 
 def _error_message(result: dict[str, Any], action: str) -> str:
-    """Format an API error response as a one-line user message."""
+    """Format an API error response as a one-line user message.
+
+    Strava-sourced activities 422 on per-activity analytics endpoints; route
+    those through the shared advisory so the caller gets the real cause + the
+    Strava-MCP recovery path instead of a raw 422.
+    """
+    sr = format_strava_restricted_error(result)
+    if sr:
+        return sr
     return f"Error {action}: {result.get('message', 'Unknown error')}"
 
 

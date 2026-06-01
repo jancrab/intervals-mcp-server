@@ -47,6 +47,7 @@ from intervals_mcp_server.utils.formatters_activity_writes import (
     format_split_interval_result,
     format_streams_update_result,
 )
+from intervals_mcp_server.utils.formatting import format_strava_restricted_error
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
@@ -197,16 +198,16 @@ async def update_activity(  # pylint: disable=too-many-arguments,too-many-locals
 # ---------------------------------------------------------------------------
 # link_activity_to_event — PUT /activity/{id} with {"paired_event_id": ...}
 #
-# Resolves the orphan-Zwift-workout case (added v1.3.1). When a user runs a
-# Zwift stock workout instead of the prescribed `.zwo`, intervals.icu can't
-# auto-link the upload to the planned event because workout structures don't
-# match — the activity stays in pre-normalization state, exposing only an
-# empty stub through the API. Manual rename + save (the v1.3.0 remediation)
-# does not unstick orphans.
+# Resolves the orphan-workout case (added v1.3.1). When a user runs a Zwift
+# stock workout instead of the prescribed `.zwo`, intervals.icu can't auto-link
+# the upload to the planned event because the workout structures don't match,
+# so the activity is left unpaired. This tool writes `paired_event_id` directly
+# into the Activity record to pair them.
 #
-# This tool POSTs the link by writing `paired_event_id` directly into the
-# Activity record. The link triggers normalization on intervals.icu's side;
-# subsequent reads return full power/HR/duration data.
+# Note: many such Zwift activities are Strava-sourced, and intervals.icu won't
+# serve or mutate Strava data via its API (permanent licensing restriction). In
+# that case the link 422s and the tool returns a `strava_restricted` envelope
+# pointing at the Strava MCP — there is nothing to "rename" that would help.
 #
 # Implementation note: the same endpoint as update_activity (PUT
 # /activity/{id}), but a focused single-field body and a structured success/
@@ -223,18 +224,17 @@ async def link_activity_to_event(
     api_key: str | None = None,
     athlete_id: str | None = None,
 ) -> str:
-    """Link an activity to a planned event on intervals.icu, forcing normalization of orphan uploads.
+    """Link an activity to a planned event on intervals.icu (pair an orphan upload).
 
-    Use this when an activity exists but is stuck in pre-normalization state — typical
-    when a Zwift stock workout was run instead of the prescribed `.zwo` file. The MCP's
-    draft-state detection (v1.3.0+) flags these. After linking, re-call
-    `get_activity_details(activity_id)` to retrieve full power/HR/duration data. Find
-    `event_id` via `get_events` for the activity's date.
+    Use this when an activity exists but didn't auto-link to a same-day planned
+    event — typical when a Zwift stock workout was run instead of the prescribed
+    `.zwo` file. After linking, re-call `get_activity_details(activity_id)` to
+    retrieve full power/HR/duration data. Find `event_id` via `get_events` for the
+    activity's date.
 
-    If the activity is too deep in pre-normalization (raw integer ID, no `i…` prefix,
-    no metadata), the link endpoint may return `draft_unrecoverable` (v1.3.2) — that
-    case requires manual save via the web UI. Use this tool when the activity has at
-    least an `i…`-prefixed ID but didn't auto-link to a same-day planned event.
+    If the activity is Strava-sourced, intervals.icu cannot serve or mutate it via
+    its API; the tool returns a `strava_restricted` envelope pointing at the Strava
+    MCP for stream recovery. A non-Strava rejection returns `link_failed`.
 
     Args:
         activity_id: The Intervals.icu activity ID (e.g. "i142786468" or upstream form).
@@ -267,38 +267,34 @@ async def link_activity_to_event(
         data=body,
     )
 
-    # Structured error path. Two layers (v1.3.2):
+    # Structured error path (v1.4.1):
     #
-    # 1. HTTP 422 from the link endpoint typically means the activity is in
-    #    a pre-normalization state too deep for intervals.icu's link path to
-    #    resolve — the endpoint requires the activity to already be in the
-    #    canonical `i…`-prefixed ID space. Activities still holding their
-    #    raw upstream ID can't be linked via the API; manual rename via the
-    #    web UI is the only known remediation. Surface as
-    #    `{"status": "draft_unrecoverable", ...}`, mirroring v1.3.0's draft-
-    #    detection pattern in `get_activity_intervals` but with a status
-    #    distinct from `draft` because this is a stronger statement: the
-    #    activity is past the point where the link endpoint can help.
-    # 2. Other 4xx/5xx responses retain the v1.3.1 verbatim-API-message
-    #    envelope so genuine failures (404, 401, 500, etc.) aren't masked
-    #    behind the draft-unrecoverable wording.
+    # 1. The typical Zwift-orphan activity is Strava-sourced, and intervals.icu
+    #    is contractually barred from serving or mutating Strava data via its
+    #    API — so the link 422s for a permanent reason that renaming cannot
+    #    fix. Detect that and surface the real cause + the Strava-MCP recovery
+    #    path as `{"status": "strava_restricted", ...}`.
+    # 2. A non-Strava 422 means the link request itself was rejected (e.g. the
+    #    activity isn't in intervals.icu's linkable ID space, or a structural
+    #    mismatch). Surface a clear `link_failed` envelope without claiming a
+    #    transient state or a guaranteed fix.
+    # 3. Other 4xx/5xx responses retain the verbatim-API-message envelope so
+    #    genuine failures (404, 401, 500, etc.) aren't masked.
     if isinstance(result, dict) and result.get("error"):
         status_code = result.get("status_code")
+        sr = format_strava_restricted_error(result, activity_id.strip())
+        if sr:
+            return _json.dumps({"status": "strava_restricted", "message": sr})
         if status_code == 422:
             return _json.dumps(
                 {
-                    "status": "draft_unrecoverable",
+                    "status": "link_failed",
                     "message": (
-                        f"Activity {activity_id.strip()} is in a "
-                        "pre-normalization state that intervals.icu's link "
-                        "endpoint cannot resolve (typical for activities "
-                        "uploaded via Zwift's built-in tests, which appear "
-                        "to bypass normalization via Strava-sync). Manual "
-                        "rename via the web UI is the only known "
-                        f"remediation: open https://intervals.icu/activities/{activity_id.strip()}, "
-                        "give the activity a name, and save. Then re-call "
-                        f"get_activity_details({activity_id.strip()}) to "
-                        "verify normalization completed."
+                        f"intervals.icu could not link activity {activity_id.strip()} "
+                        f"to event {event_id_int} (HTTP 422). The activity may not be "
+                        "in intervals.icu's linkable ID space, or the request was "
+                        f"rejected. Inspect it at https://intervals.icu/activities/{activity_id.strip()} "
+                        "and check the planned event via get_events for its date."
                     ),
                 }
             )
