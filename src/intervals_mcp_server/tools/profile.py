@@ -9,7 +9,7 @@ Two profiles are supported via the `INTERVALS_PROFILE` env var:
   maintenance, and FTP/zone updates. Keeps the MCP tool catalog small
   (~14.9k tokens of schema) so it doesn't dominate Claude Desktop windows.
 
-- `full` — exposes all 136 tools. Useful for power users who want SDK-
+- `full` — exposes all 137 tools. Useful for power users who want SDK-
   style coverage of the full intervals.icu API surface. Costs ~44 KB of
   schema in the system prompt on every turn.
 

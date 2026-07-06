@@ -6,6 +6,15 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.5.1] — 2026-07-06 — upstream sync (pace value units + calendar notes)
+
+Cherry-picked two small, isolated upstream commits (no rebase — our published tags/releases and history are preserved):
+
+- **#105** — pace + swim-pace units added to `ValueUnits` (`utils/types.py`).
+- **#109** — calendar-notes support (event category `NOTE`) in `events.py`. Adds one full-only tool → full **136 → 137**; lean unchanged at 45.
+
+The two other upstream commits we were behind on (#107 gear-name resolution / `get_gear_list`, #101 athlete power curves) were deliberately **skipped** — this fork already implements both, more completely. 227 tests passing.
+
 ## [1.5.0] — 2026-07-06 — gear-maintenance + FTP-set in lean, full_toolset toggle
 
 The gear-write and FTP/zone-write tools already existed but were full-only, so a default (lean) session couldn't reach them — it looked like the features were missing. This release surfaces the recurring ones in lean and adds a click-based profile toggle.
