@@ -2,9 +2,9 @@
   "manifest_version": "0.3",
   "name": "intervals-icu-jan",
   "display_name": "intervals.icu (jan fork)",
-  "version": "1.4.1",
-  "description": "intervals.icu MCP server — 135 tools across 17 domains. Lean profile (default) exposes 40 high-value tools (~13.9k tokens); set INTERVALS_PROFILE=full for the full surface (~44k tokens). Strava-sourced activities render a clean [strava-restricted] advisory (intervals.icu can't serve Strava data via its API). Forked from mvilanova/intervals-mcp-server.",
-  "long_description": "Model Context Protocol server exposing the intervals.icu REST API for personal use. Covers activities (CRUD, analytics, search), events (calendar CRUD + bulk ops), wellness (read + locked-aware writes), workout templates, sport settings, gear + reminders, athlete profile + training plan, weather, routes, file operations (FIT/GPX/ZWO/MRC/ERG/TCX uploads + downloads), and a cross-domain aggregator (`get_activity_full_report`) that fetches 8 endpoints in parallel and returns one consolidated markdown report. Two profiles: `lean` (default — 40 tools, ~13.9k tokens of tool schema, sized for Claude Desktop) and `full` (135 tools, ~44k tokens, full SDK coverage; `get_activity_full_report` is full-only). Each write tool is gated by `permissions.ask` in Claude Code; wellness writes default `locked: true` to survive Oura/Garmin sync.\n\n**Prerequisite**: this extension runs the Python server via `uv` (Astral's fast Python package manager). Install `uv` once, then this DXT bundle works without any further toolchain setup. macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Windows: `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"`. Python 3.12+ is required; `uv` will auto-resolve and provision it on first run.",
+  "version": "1.5.0",
+  "description": "intervals.icu MCP server — 136 tools across 17 domains. Lean profile (default) exposes 45 high-value tools (~14.9k tokens); flip the full_toolset toggle for the full surface (~44k tokens). Strava-sourced activities render a clean [strava-restricted] advisory (intervals.icu can't serve Strava data via its API). Forked from mvilanova/intervals-mcp-server.",
+  "long_description": "Model Context Protocol server exposing the intervals.icu REST API for personal use. Covers activities (CRUD, analytics, search), events (calendar CRUD + bulk ops), wellness (read + locked-aware writes), workout templates, sport settings, gear + reminders, athlete profile + training plan, weather, routes, file operations (FIT/GPX/ZWO/MRC/ERG/TCX uploads + downloads), and a cross-domain aggregator (`get_activity_full_report`) that fetches 8 endpoints in parallel and returns one consolidated markdown report. Two profiles: `lean` (default — 45 tools, ~14.9k tokens of tool schema, sized for Claude Desktop) and `full` (136 tools, ~44k tokens, full SDK coverage; `get_activity_full_report` is full-only). Each write tool is gated by `permissions.ask` in Claude Code; wellness writes default `locked: true` to survive Oura/Garmin sync.\n\n**Prerequisite**: this extension runs the Python server via `uv` (Astral's fast Python package manager). Install `uv` once, then this DXT bundle works without any further toolchain setup. macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Windows: `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"`. Python 3.12+ is required; `uv` will auto-resolve and provision it on first run.",
   "author": {
     "name": "Jan",
     "url": "https://github.com/jancrab/intervals-mcp-server"
@@ -27,7 +27,11 @@
   ],
   "compatibility": {
     "claude_desktop": ">=0.10.0",
-    "platforms": ["darwin", "linux", "win32"]
+    "platforms": [
+      "darwin",
+      "linux",
+      "win32"
+    ]
   },
   "server": {
     "type": "python",
@@ -47,7 +51,8 @@
         "ATHLETE_ID": "${user_config.athlete_id}",
         "INTERVALS_API_BASE_URL": "https://intervals.icu/api/v1",
         "INTERVALS_PROFILE": "${user_config.profile}",
-        "LOG_LEVEL": "${user_config.log_level}"
+        "LOG_LEVEL": "${user_config.log_level}",
+        "INTERVALS_PROFILE_FULL": "${user_config.full_toolset}"
       }
     }
   },
@@ -66,10 +71,17 @@
       "description": "Your numeric athlete ID, e.g. i12345 — visible in your profile URL.",
       "required": true
     },
+    "full_toolset": {
+      "type": "boolean",
+      "title": "Full toolset (advanced)",
+      "description": "OFF (default) = lean profile (~45 high-value tools, ~15k tokens of schema) — everyday cycling coaching PLUS gear-maintenance (create/replace gear, wear reminders) and FTP/zone updates are already included, no toggle needed. ON = full profile (all 135 tools, ~44k tokens) for rare advanced ops: initial component setup, bulk event creation, wellness backfill, and analytics deep-dives (histograms, power-curves, etc.). Changing this relaunches the extension server, so the fresh connection re-reads the tool list; if Claude Desktop doesn't refresh, restart Desktop once.",
+      "default": false,
+      "required": false
+    },
     "profile": {
       "type": "string",
-      "title": "Tool profile (type 'lean' or 'full')",
-      "description": "Type EXACTLY one of two values:  •  lean (recommended) — 28 high-value tools, ~11k tokens of schema. Sized for Claude Desktop without dominating the context window. Includes the get_activity_full_report aggregator + create_manual_activity + download_workout (Zwift export).  •  full — all 134 tools, ~44k tokens of schema. SDK-style coverage. Use only if you need long-tail endpoints (gear management, sport-settings tweaks, custom dashboard items, OAuth disconnect, FIT bundle downloads, etc.). Anything other than the literal string 'full' falls back to lean — typo-resistant.",
+      "title": "Tool profile (legacy: 'lean' or 'full')",
+      "description": "Legacy free-text fallback, kept for back-compat. The 'Full toolset' checkbox above is the recommended control. Values: lean (default, ~45 tools) or full (all 135 tools). Anything other than the literal 'full' falls back to lean. If the checkbox is ON it wins over this field.",
       "default": "lean",
       "required": false
     },

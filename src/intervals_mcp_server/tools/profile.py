@@ -3,15 +3,19 @@ Profile gate for the Intervals.icu MCP Server.
 
 Two profiles are supported via the `INTERVALS_PROFILE` env var:
 
-- `lean` (default) — exposes 40 high-value tools chosen to cover the four
+- `lean` (default) — exposes 45 high-value tools chosen to cover the four
   AI training-partner workflows (daily readiness, weekly planning, post-
-  workout debrief, strength logging) plus Zwift workout export. Keeps the
-  MCP tool catalog small (~13.9 KB of schema) so it doesn't dominate Claude
-  Desktop / DXT context windows.
+  workout debrief, strength logging) plus Zwift workout export, gear
+  maintenance, and FTP/zone updates. Keeps the MCP tool catalog small
+  (~14.9k tokens of schema) so it doesn't dominate Claude Desktop windows.
 
-- `full` — exposes all 135 tools. Useful for power users who want SDK-
+- `full` — exposes all 136 tools. Useful for power users who want SDK-
   style coverage of the full intervals.icu API surface. Costs ~44 KB of
   schema in the system prompt on every turn.
+
+Selected via the `full_toolset` boolean user-config toggle (mapped to env
+`INTERVALS_PROFILE_FULL`); the legacy free-text `INTERVALS_PROFILE` is still
+honored for back-compat.
 
 The profile is applied AFTER all tool modules import. Each tool module
 unconditionally calls `@mcp.tool()` at import time; we then walk the
@@ -117,6 +121,17 @@ LEAN_TOOLS: frozenset[str] = frozenset(
         "list_workouts",
         "get_workout",
         "download_workout",             # Zwift .zwo / .mrc / .erg / .fit export
+        # --- v1.5.0: gear-maintenance + FTP-set (toggle-free everyday ops) --
+        # These write tools already existed but were full-only, which meant a
+        # normal lean session couldn't reach them at all (looked like "the
+        # feature doesn't exist"). Promoted so the recurring maintenance +
+        # FTP-retest flows work without a 44k full escalation. Rare/bulk gear
+        # ops stay full-only. See CLAUDE.md § MCP profile policy.
+        "update_sport_settings",        # set FTP / LTHR / zones after a retest (e.g. ("Ride", {"ftp": 228}))
+        "create_gear",                  # add a bike OR a component (brake pads, tyre, chain, …)
+        "create_gear_reminder",         # wear reminder ("warn at X km")
+        "replace_gear",                 # retire component + swap in a copy (the physical-swap flow)
+        "recalc_gear_distance",         # recompute gear odometer after edits
     }
 )
 

@@ -48,14 +48,22 @@ def load_config() -> Config:
     intervals_api_base_url = os.getenv("INTERVALS_API_BASE_URL", "https://intervals.icu/api/v1")
     user_agent = "intervalsicu-mcp-server/1.0"
 
-    # Profile gate: "lean" (default) exposes ~26 high-value tools to keep
-    # context cost low for Claude Desktop / DXT installs. "full" exposes all
-    # 133 tools — useful for power users / SDK-style scripting where the
-    # context-cost tradeoff is acceptable. Any value other than "full" is
-    # treated as "lean" so misspellings don't accidentally expose 5x the
-    # surface area.
+    # Profile gate. "lean" (default, ~45 tools) keeps context cost low for
+    # Claude Desktop installs; "full" (all 135 tools) is for occasional
+    # advanced modes (gear setup, bulk events, analytics deep-dives).
+    #
+    # Two inputs; the boolean toggle wins:
+    # - INTERVALS_PROFILE_FULL — boolean from the MCPB `full_toolset`
+    #   user-config checkbox (passed as "true"/"false"). Truthy → full. This
+    #   is the click-based UX; flipping it relaunches the extension server, so
+    #   the fresh connect re-reads the tool list (no live mid-session switch).
+    # - INTERVALS_PROFILE — legacy free-text ("full" → full), kept for
+    #   back-compat and manual/env use.
+    # Anything else → lean, so a misspelling never accidentally exposes the
+    # full ~135-tool surface.
+    profile_full = os.getenv("INTERVALS_PROFILE_FULL", "").strip().lower() in ("true", "1", "yes", "on")
     profile_raw = os.getenv("INTERVALS_PROFILE", "lean").strip().lower()
-    profile = "full" if profile_raw == "full" else "lean"
+    profile = "full" if (profile_full or profile_raw == "full") else "lean"
 
     # Validate athlete_id if provided (empty string is allowed)
     if athlete_id:

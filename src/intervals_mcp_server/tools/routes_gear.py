@@ -307,6 +307,18 @@ async def create_gear(
         ``component_ids`` (list of gear ids), ``component`` (bool — is this a
         component of another gear).
 
+    Attaching a component to a bike (verified live 2026-07-06 — do NOT guess):
+        Creating with ``component=true`` makes a standalone component; it does
+        NOT auto-attach to any bike. The bike's ``component_ids`` is NOT a
+        writable attach field — a PUT of it on the bike echoes the value back
+        but a fresh GET returns ``null`` (it is read-only / derived). So the
+        component→bike link cannot be set through this API. Do the linking in
+        the intervals.icu web UI (Gear → the bike → add component), then manage
+        the existing component from here: ``create_gear_reminder`` (wear
+        threshold), ``replace_gear`` (swap on wear-out), ``recalc_gear_distance``,
+        ``list_gear``. For the component's odometer to accumulate km, its
+        ``activity_filters`` must match the bike's rides (also set in the UI).
+
     Args:
         gear: Gear body.
         athlete_id: The Intervals.icu athlete ID (optional, defaults to ATHLETE_ID env var)

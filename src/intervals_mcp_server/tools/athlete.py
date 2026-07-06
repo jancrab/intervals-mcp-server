@@ -10,6 +10,7 @@ mvilanova fork but are needed by the AITrainer skill set:
 - get_ftp_history: FTP change-points extracted from the activities feed.
 """
 
+import json
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -169,3 +170,39 @@ async def get_ftp_history(
         )
 
     return format_ftp_history(activities)
+
+
+@mcp.tool()
+async def get_fitness_model_events(
+    athlete_id: str | None = None,
+    api_key: str | None = None,
+) -> str:
+    """Get the events that influence the athlete's fitness model on Intervals.icu.
+
+    Reads /athlete/{id}/fitness-model-events — the discrete events the CTL/ATL/
+    form and performance-model computation keys off (as returned by the API).
+    Useful for understanding *why* the fitness curve stepped or an eFTP estimate
+    changed. Response shape is passed through as JSON.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/fitness-model-events", api_key=api_key
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        return f"Error fetching fitness model events: {result.get('message')}"
+
+    if not result:
+        return f"No fitness model events found for athlete {athlete_id_to_use}."
+
+    body = json.dumps(result, indent=2, default=str)
+    if len(body) > 6000:
+        body = body[:6000] + "\n… (truncated)"
+    return "Fitness model events:\n\n```json\n" + body + "\n```"

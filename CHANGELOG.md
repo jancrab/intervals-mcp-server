@@ -6,6 +6,29 @@ This fork tracks divergence from upstream `mvilanova/intervals-mcp-server`. See 
 
 _Nothing yet._
 
+## [1.5.0] — 2026-07-06 — gear-maintenance + FTP-set in lean, full_toolset toggle
+
+The gear-write and FTP/zone-write tools already existed but were full-only, so a default (lean) session couldn't reach them — it looked like the features were missing. This release surfaces the recurring ones in lean and adds a click-based profile toggle.
+
+### Added
+
+- **`full_toolset` boolean user-config toggle** (manifest) → env `INTERVALS_PROFILE_FULL`. OFF (default) = lean; ON = full (all 136 tools). The legacy free-text `INTERVALS_PROFILE=full` still works; the toggle wins when both are set. Flipping the toggle relaunches the extension server, so the fresh connection re-reads the tool list (no live mid-session switch — restart Desktop if it doesn't refresh).
+- **`get_fitness_model_events`** — new full-only read tool (`GET /athlete/{id}/fitness-model-events`); the one endpoint from the maintenance batch not already wrapped.
+
+### Changed — lean profile 40 → 45 tools (~13.9k → ~14.9k tokens)
+
+Promoted to lean (recurring maintenance + retest ops, so they work without a full escalation):
+- `update_sport_settings` — set FTP / LTHR / zones after a retest, e.g. `("Ride", {"ftp": 228})`.
+- `create_gear`, `create_gear_reminder`, `replace_gear`, `recalc_gear_distance`.
+
+Rare/bulk gear ops, all Part-3 analytics, and `get_fitness_model_events` stay full-only.
+
+### Notes
+
+- **Gear component→bike attach (verified live 2026-07-06):** the bike's `component_ids` is **not** a writable attach field — a PUT echoes the value but a fresh GET returns `null` (read-only/derived). So a component→bike link can't be set via the API; do the linking in the intervals.icu web UI, then manage the component (reminders/replace/recalc) via these tools. Documented in the `create_gear` docstring.
+- No tools removed; no existing signatures changed. 223 tests passing.
+
+
 ## [1.4.1] — 2026-05-31 — Strava-restricted on derived endpoints + obsolete-wording purge
 
 v1.4.0 fixed the summary/details path (`get_activities`, `get_activity_details` already render `[strava-restricted]`), but the per-activity **derived** endpoints still leaked the old draft wording on a 422. Live re-probe (2026-05-31) confirmed: `get_activity_intervals` on a Strava activity returned `{"status":"draft", ... "name and save it on the web UI ..."}`, and streams/curves surfaced a raw `Error fetching ...: 422`. This release closes that gap.
